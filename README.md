@@ -152,6 +152,7 @@ Create `backend/.env` from `backend/.env.example`.
 Required variables:
 ```env
 PORT=5000
+CORS_ORIGIN=http://localhost:5173
 MONGODB_URL=mongodb://localhost:27017/blog
 JWT_SECRET=your-super-secret-jwt-key-change-this-in-production
 JWT_EXPIRES_IN=7d
@@ -196,6 +197,34 @@ Frontend development notes:
 Default URLs:
 - Backend: `http://localhost:5000`
 - Frontend: `http://localhost:5173`
+
+## Deploy on Vercel
+
+Use **two Vercel projects** from this same repo:
+
+### 1) Backend Project (Root Directory: `backend`)
+1. Import repo in Vercel and set Root Directory to `backend`.
+2. Vercel will use `backend/vercel.json` to run Express as a serverless function.
+3. Add backend env vars in Vercel:
+  - `MONGODB_URL`
+  - `JWT_SECRET`
+  - `JWT_EXPIRES_IN`
+  - `ADMIN_USERNAME`
+  - `ADMIN_PASSWORD`
+  - `CORS_ORIGIN` = your frontend Vercel URL (or multiple comma-separated URLs)
+4. Deploy and copy the backend URL (example: `https://your-backend.vercel.app`).
+
+### 2) Frontend Project (Root Directory: `frontend`)
+1. Import repo in Vercel and set Root Directory to `frontend`.
+2. Add env var:
+  - `BACKEND_URL` = backend URL from step 1.
+3. Deploy frontend.
+
+### Notes
+- Frontend now calls `/api` by default; in Vercel this is proxied by `frontend/api/[...path].js` to `BACKEND_URL`.
+- In local dev, Vite proxies `/api` to `http://localhost:5000`.
+- Health check endpoint: `GET /api/health` on frontend returns proxy status and backend reachability.
+- Backend does not use `PORT` on Vercel; local `npm run dev` still works as before.
 
 ## Security Testing Checklist
 

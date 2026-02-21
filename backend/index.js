@@ -6,16 +6,17 @@ import orderRoutes from './routes/orderroutes.js';
 import { mongoDBURL, PORT } from './config.js';
 import cors from 'cors';
 
-console.log('Starting server...');
-console.log('PORT:', PORT);
-
 const app = express();
 
-console.log('Express app created');
+const localOrigins = ['http://localhost:5173', 'http://localhost:5000'];
+const envOrigins = process.env.CORS_ORIGIN
+  ? process.env.CORS_ORIGIN.split(',').map((origin) => origin.trim()).filter(Boolean)
+  : [];
+const allowedOrigins = [...new Set([...localOrigins, ...envOrigins])];
 
 // Middleware to handle CORS - single configuration
 app.use(cors({
-  origin: ['http://localhost:5173', 'http://localhost:5000'],
+  origin: allowedOrigins,
   methods: ['GET', 'POST', 'PUT', 'DELETE'],
   credentials: true,
   allowedHeaders: ['Content-Type', 'Authorization']
@@ -29,20 +30,42 @@ app.get('/', (req, res) => {
   res.send('Hello, World!');
 });
 
+let cachedConnection = global.mongooseConnection;
+
+const connectDB = async () => {
+  if (cachedConnection) {
+    return cachedConnection;
+  }
+
+  cachedConnection = await mongoose.connect(mongoDBURL);
+  global.mongooseConnection = cachedConnection;
+  return cachedConnection;
+};
+
+app.use(async (req, res, next) => {
+  try {
+    await connectDB();
+    next();
+  } catch (error) {
+    res.status(500).json({ message: 'Database connection failed', error: error.message });
+  }
+});
+
 app.use('/books', bookRoutes);
 app.use('/auth', authRoutes);
 app.use('/orders', orderRoutes);
 
-mongoose
-  .connect(mongoDBURL)
-  .then(() => {
-    console.log('Connected to MongoDB');
-    app.listen(PORT, () => {
-      console.log(`Server is running on port ${PORT}`);
+if (process.env.VERCEL !== '1') {
+  connectDB()
+    .then(() => {
+      app.listen(PORT, () => {
+        console.log(`Server is running on port ${PORT}`);
+      });
+    })
+    .catch((error) => {
+      console.error('Error connecting to MongoDB:', error.message);
     });
-  })
-  .catch((error) => {
-    console.error('Error connecting to MongoDB:', error.message);
-    console.error('Full error:', error);
-  });
+}
+
+export default app;
 
