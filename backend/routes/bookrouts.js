@@ -1,14 +1,23 @@
 import express from 'express';
 import mongoose from 'mongoose';
 import Book from '../models/bookmodels.js';
-import { mongoDBURL, PORT } from '../config.js';
+import Order from '../models/ordermodel.js';
+import { authenticateToken, requireRole } from '../middleware/auth.js';
 
 const router = express.Router();
 
 // route to get all books
 router.get('/', async (req, res) => {
     try {
-        const books = await Book.find();
+        const orderedBookIds = await Order.distinct('bookId');
+        const orderedObjectIds = orderedBookIds
+            .filter((bookId) => mongoose.Types.ObjectId.isValid(bookId))
+            .map((bookId) => new mongoose.Types.ObjectId(bookId));
+
+        const books = await Book.find({
+            _id: { $nin: orderedObjectIds }
+        });
+
         res.json({
             count: books.length,
             books
@@ -32,8 +41,8 @@ router.get('/:id', async (req, res) => {
     }
 });
 
-//route to update a new book
-router.put('/:id', async (req, res) => {
+//route to update a new book (admin only)
+router.put('/:id', authenticateToken, requireRole('admin'), async (req, res) => {
     try {
         const updatedBook = await Book.findByIdAndUpdate(req.params.id, req.body, { new: true });
 
@@ -48,8 +57,8 @@ router.put('/:id', async (req, res) => {
     }
 });
 
-//route to delete a book by ID
-router.delete('/:id', async (req, res) => {
+//route to delete a book by ID (admin only)
+router.delete('/:id', authenticateToken, requireRole('admin'), async (req, res) => {
     try {
         const deletedBook = await Book.findByIdAndDelete(req.params.id);
 
@@ -64,8 +73,8 @@ router.delete('/:id', async (req, res) => {
     }
 });
 
-//route to create a new book
-router.post('/', async (request, response) => {
+//route to create a new book (admin only)
+router.post('/', authenticateToken, requireRole('admin'), async (request, response) => {
     try {
         const publishedDate = request.body.publishedDate ?? request.body.publishYear;
 

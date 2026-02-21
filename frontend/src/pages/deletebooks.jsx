@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import BackButton from '../components/backbutton';
-import axios from 'axios';
+import axios from '../utils/axios';
 import Spinner from '../components/spinner';
 import { useParams, useNavigate } from 'react-router-dom';
 
@@ -10,7 +10,7 @@ const Deletebook = () => {
   const [loading, setLoading] = useState(false);
   async function handleDeletebook() {
     try {
-      await axios.delete(`http://localhost:5000/books/${id}`);
+      await axios.delete(`/books/${id}`);
       navigate('/');
     } catch (error) {
       console.error('Error deleting book:', error);

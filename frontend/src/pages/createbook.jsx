@@ -1,7 +1,7 @@
 import React from 'react'
 import { useEffect, useState } from 'react';
 import BackButton from '../components/backbutton';
-import axios from 'axios';
+import axios from '../utils/axios';
 import Spinner from '../components/spinner';
 import { useNavigate } from 'react-router-dom';
 
@@ -21,7 +21,7 @@ const CreateBook = () => {
 
     try {
       setLoading(true);
-      const response = await axios.post('http://localhost:5000/books', {
+      const response = await axios.post('/books', {
         title,
         author,
         publishedDate: new Date(publishedDate),

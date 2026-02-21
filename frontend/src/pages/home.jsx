@@ -1,12 +1,15 @@
 import React, { useEffect, useState } from 'react';
 import Spinner from '../components/spinner';
-import axios from 'axios';
-import { Link } from 'react-router-dom';
+import axios from '../utils/axios';
+import { Link, useNavigate } from 'react-router-dom';
 import { AiOutlineEdit } from 'react-icons/ai';
 import { BsInfoCircle } from 'react-icons/bs';
 import { MdOutlineDelete, MdOutlineAddBox } from 'react-icons/md';
+import { useAuth } from '../hooks/useAuth';
 
 const Home = () => {
+  const navigate = useNavigate();
+  const { logout } = useAuth();
   const [books, setBooks] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -14,7 +17,7 @@ const Home = () => {
     const fetchBooks = async () => {
       setLoading(true);
       try {
-        const response = await axios.get('http://localhost:5000/books');
+        const response = await axios.get('/books');
         // Assuming your backend returns { books: [...] }
         setBooks(response.data.books || response.data); 
         setLoading(false);
@@ -25,6 +28,11 @@ const Home = () => {
     };
     fetchBooks();
   }, []);
+
+  const handleLogout = () => {
+    logout();
+    navigate('/login', { replace: true });
+  };
 
   return (
 
@@ -38,14 +46,30 @@ const Home = () => {
           <h1 className="text-4xl md:text-5xl font-extrabold text-white tracking-tight">
             Book <span className="text-white">Collection</span>
           </h1>
-          
-          <Link 
-            to="/books/create" 
-            className="flex items-center gap-2 bg-white hover:bg-gray-200 text-gray-900 px-8 py-3 rounded-2xl transition-all duration-300 shadow-lg hover:shadow-sky-500/40 active:scale-95"
-          >
-            <MdOutlineAddBox className="text-2xl" />
-            <span className="font-bold uppercase tracking-wider">Add New Book</span>
-          </Link>
+
+          <div className="flex items-center gap-3">
+            <Link
+              to="/books/create"
+              className="flex items-center gap-2 bg-white hover:bg-gray-200 text-gray-900 px-8 py-3 rounded-2xl transition-all duration-300 shadow-lg hover:shadow-sky-500/40 active:scale-95"
+            >
+              <MdOutlineAddBox className="text-2xl" />
+              <span className="font-bold uppercase tracking-wider">Add New Book</span>
+            </Link>
+
+            <Link
+              to="/admin/orders"
+              className="bg-emerald-500 hover:bg-emerald-400 text-white px-5 py-3 rounded-2xl transition-all duration-300"
+            >
+              Order Dashboard
+            </Link>
+
+            <button
+              onClick={handleLogout}
+              className="bg-gray-700 hover:bg-gray-600 text-white px-4 py-3 rounded-2xl transition-all duration-300"
+            >
+              Logout
+            </button>
+          </div>
         </div>
 
         {loading ? (

@@ -1,7 +1,7 @@
 import React from 'react'
 import { useEffect, useState } from 'react';
 import BackButton from '../components/backbutton';
-import axios from 'axios';
+import axios from '../utils/axios';
 import Spinner from '../components/spinner';
 import { useNavigate , useParams} from 'react-router-dom';
 
@@ -17,7 +17,7 @@ const EditBook = () => {
   useEffect(() => {
     const fetchBook = async () => {
       try {
-        const response = await axios.get(`http://localhost:5000/books/${id}`);
+        const response = await axios.get(`/books/${id}`);
         setTitle(response.data.title);
         setAuthor(response.data.author);
         setPublishedDate(new Date(response.data.publishedDate).toISOString().split('T')[0]);
@@ -37,7 +37,7 @@ const EditBook = () => {
 
     try {
       setLoading(true);
-      const response = await axios.put(`http://localhost:5000/books/${id}`, {
+      const response = await axios.put(`/books/${id}`, {
         title,
         author,
         publishedDate: new Date(publishedDate),

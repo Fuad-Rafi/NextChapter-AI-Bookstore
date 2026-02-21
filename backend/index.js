@@ -1,7 +1,8 @@
 import express from 'express';
 import mongoose from 'mongoose';
-import Book from './models/bookmodels.js';
 import bookRoutes from './routes/bookrouts.js';
+import authRoutes from './routes/authroutes.js';
+import orderRoutes from './routes/orderroutes.js';
 import { mongoDBURL, PORT } from './config.js';
 import cors from 'cors';
 
@@ -17,7 +18,7 @@ app.use(cors({
   origin: ['http://localhost:5173', 'http://localhost:5000'],
   methods: ['GET', 'POST', 'PUT', 'DELETE'],
   credentials: true,
-  allowedHeaders: ['Content-Type']
+  allowedHeaders: ['Content-Type', 'Authorization']
 }));
 
 // Middleware to parse JSON bodies
@@ -29,6 +30,8 @@ app.get('/', (req, res) => {
 });
 
 app.use('/books', bookRoutes);
+app.use('/auth', authRoutes);
+app.use('/orders', orderRoutes);
 
 mongoose
   .connect(mongoDBURL)

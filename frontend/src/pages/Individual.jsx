@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import BackButton from '../components/backbutton';
-import axios from 'axios';
+import axios from '../utils/axios';
 import Spinner from '../components/spinner';
 import { useParams } from 'react-router-dom';
 
@@ -13,7 +13,7 @@ const Individual = () => {
   useEffect(() => {
     const fetchBook = async () => {
       try {
-        const response = await axios.get(`http://localhost:5000/books/${id}`);
+        const response = await axios.get(`/books/${id}`);
         setBook(response.data);
         setLoading(false);
       } catch (error) {
