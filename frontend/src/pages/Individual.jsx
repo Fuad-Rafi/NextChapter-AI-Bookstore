@@ -26,34 +26,34 @@ const Individual = () => {
   }, [id]);
 
   return (
-    <div className="p-4">
+    <div className="min-h-screen bg-gray-100 p-4 md:p-7">
       <BackButton to="/" />
-      <h1 className="text-3xl font-bold mb-4">Details</h1>
+      <h1 className="text-3xl font-bold text-gray-900 mb-6">Details</h1>
       {loading ? (
         <Spinner />
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          <div className="bg-gray-800 p-4 rounded-lg shadow-lg">
-            <span className="text-gray-400">ID</span>
-            <span> {book._id} </span>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="bg-white p-4 rounded-lg border border-gray-200 shadow-sm">
+            <p className="text-sm font-medium text-gray-500">ID</p>
+            <p className="mt-1 text-base font-semibold text-gray-900 break-all">{book._id}</p>
           </div>
-          <div className="bg-gray-800 p-4 rounded-lg shadow-lg">
-            <span className="text-gray-400">Title</span>
-            <span> {book.title} </span>
+          <div className="bg-white p-4 rounded-lg border border-gray-200 shadow-sm">
+            <p className="text-sm font-medium text-gray-500">Title</p>
+            <p className="mt-1 text-base font-semibold text-gray-900">{book.title}</p>
           </div>
-          <div className="bg-gray-800 p-4 rounded-lg shadow-lg">
-            <span className="text-gray-400">Author</span>
-            <span> {book.author} </span>
+          <div className="bg-white p-4 rounded-lg border border-gray-200 shadow-sm">
+            <p className="text-sm font-medium text-gray-500">Author</p>
+            <p className="mt-1 text-base font-semibold text-gray-900">{book.author}</p>
           </div>
-          <div className="bg-gray-800 p-4 rounded-lg shadow-lg">
-            <span className="text-gray-400">Publish Year</span>
-            <span> {new Date(book.publishedDate).getFullYear()} </span>
+          <div className="bg-white p-4 rounded-lg border border-gray-200 shadow-sm">
+            <p className="text-sm font-medium text-gray-500">Publish Year</p>
+            <p className="mt-1 text-base font-semibold text-gray-900">{new Date(book.publishedDate).getFullYear()}</p>
           </div>
-          <div className="bg-gray-800 p-4 rounded-lg shadow-lg">
-            <span className="text-gray-400">Last Update time</span>
-            <span>
+          <div className="bg-white p-4 rounded-lg border border-gray-200 shadow-sm">
+            <p className="text-sm font-medium text-gray-500">Last Update Time</p>
+            <p className="mt-1 text-base font-semibold text-gray-900">
               {book?.updatedAt ? new Date(book.updatedAt).toLocaleString() : 'N/A'}
-            </span>
+            </p>
           </div>
         </div>
           

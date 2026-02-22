@@ -11,8 +11,23 @@ const EditBook = () => {
   const [title, setTitle] = useState('');
   const [author, setAuthor] = useState('');
   const [publishedDate, setPublishedDate] = useState('');
+  const [price, setPrice] = useState('');
+  const [coverImage, setCoverImage] = useState('');
   const [loading, setLoading] = useState(false);
   const { id } = useParams();
+
+  const handleCoverImageChange = (event) => {
+    const file = event.target.files?.[0];
+    if (!file) {
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setCoverImage(typeof reader.result === 'string' ? reader.result : '');
+    };
+    reader.readAsDataURL(file);
+  };
 
   useEffect(() => {
     const fetchBook = async () => {
@@ -21,6 +36,8 @@ const EditBook = () => {
         setTitle(response.data.title);
         setAuthor(response.data.author);
         setPublishedDate(new Date(response.data.publishedDate).toISOString().split('T')[0]);
+        setPrice(response.data.price ?? '');
+        setCoverImage(response.data.coverImage || '');
       } catch (error) {
         console.error('Error fetching book:', error);
       }
@@ -41,10 +58,12 @@ const EditBook = () => {
         title,
         author,
         publishedDate: new Date(publishedDate),
+        price: price === '' ? null : Number(price),
+        coverImage,
       });
       console.log(response.data);
       setLoading(false);
-      navigate('/');
+      navigate('/admin/home');
     } catch (error) {
       console.error('Error editing book:', error);
       setLoading(false);
@@ -73,6 +92,34 @@ const EditBook = () => {
             value={author}
             onChange={(e) => setAuthor(e.target.value)}
           />
+        </div>
+        <div>
+          <label className="block text-gray-700 mb-2">Price</label>
+          <input
+            type="number"
+            min="0"
+            step="0.01"
+            className="w-full p-2 border border-gray-300 rounded"
+            value={price}
+            onChange={(e) => setPrice(e.target.value)}
+            placeholder="e.g. 49.99"
+          />
+        </div>
+        <div>
+          <label className="block text-gray-700 mb-2">Book Cover Image</label>
+          <input
+            type="file"
+            accept="image/*"
+            className="w-full p-2 border border-gray-300 rounded bg-white"
+            onChange={handleCoverImageChange}
+          />
+          {coverImage && (
+            <img
+              src={coverImage}
+              alt="Cover preview"
+              className="mt-3 h-48 w-32 rounded-md border border-gray-300 object-cover"
+            />
+          )}
         </div>
         <div>
           <label className="block text-gray-700 mb-2">Published Date</label>

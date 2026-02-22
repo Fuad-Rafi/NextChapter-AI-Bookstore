@@ -23,7 +23,7 @@ app.use(cors({
 }));
 
 // Middleware to parse JSON bodies
-app.use(express.json());
+app.use(express.json({ limit: '10mb' }));
 
 app.get('/', (req, res) => {
   console.log('All good here');

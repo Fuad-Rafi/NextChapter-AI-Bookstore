@@ -1,10 +1,9 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import Spinner from '../components/spinner';
 import axios from '../utils/axios';
 import { Link, useNavigate } from 'react-router-dom';
-import { AiOutlineEdit } from 'react-icons/ai';
-import { BsInfoCircle } from 'react-icons/bs';
-import { MdOutlineDelete, MdOutlineAddBox } from 'react-icons/md';
+import { MdOutlineAddBox } from 'react-icons/md';
+import { FiGrid, FiList } from 'react-icons/fi';
 import { useAuth } from '../hooks/useAuth';
 
 const Home = () => {
@@ -12,6 +11,9 @@ const Home = () => {
   const { logout } = useAuth();
   const [books, setBooks] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [filter, setFilter] = useState('all');
+  const [viewMode, setViewMode] = useState('grid');
+  const [searchTerm, setSearchTerm] = useState('');
 
   useEffect(() => {
     const fetchBooks = async () => {
@@ -34,126 +36,166 @@ const Home = () => {
     navigate('/login', { replace: true });
   };
 
+  const filteredBooks = useMemo(() => {
+    return books.filter((book) => {
+      const status = String(book.status || (book.publishedDate ? 'published' : 'draft')).toLowerCase();
+      const matchesFilter = filter === 'all' || status === filter;
+      const matchesSearch = (book.title || '').toLowerCase().includes(searchTerm.trim().toLowerCase());
+      return matchesFilter && matchesSearch;
+    });
+  }, [books, filter, searchTerm]);
+
+  const getDisplayImage = (book) => book.coverImage || book.image || '';
+
+  const getStatus = (book) => String(book.status || (book.publishedDate ? 'published' : 'draft')).toLowerCase();
+
+  const formatCurrency = (value) => {
+    if (typeof value !== 'number') return '-';
+    return `$${value.toFixed(2)}`;
+  };
+
   return (
-
-    <div className="min-h-screen w-full flex flex-col items-center justify-center bg-linear-to-br from-gray-900 via-gray-800 to-black p-4 md:p-10">
-      
-      {/* CONTENT CONTAINER: Limits width for better readability on large screens */}
-      <div className="w-full max-w-6xl">
-        
-        {/* HEADER SECTION */}
-        <div className="flex flex-col md:flex-row justify-between items-center mb-8 gap-6">
-          <h1 className="text-4xl md:text-5xl font-extrabold text-white tracking-tight">
-            Book <span className="text-white">Collection</span>
-          </h1>
-
+    <div className="min-h-screen bg-gray-100 p-4 md:p-7">
+      <div className="mx-auto w-full max-w-7xl">
+        <div className="mb-6 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+          <h1 className="text-3xl font-bold text-gray-900">Products</h1>
+          <div className="w-full md:max-w-xl">
+            <input
+              type="text"
+              value={searchTerm}
+              onChange={(event) => setSearchTerm(event.target.value)}
+              placeholder="Search books by name"
+              className="w-full rounded-md border border-gray-300 bg-white px-4 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:border-blue-500 focus:outline-none"
+            />
+          </div>
           <div className="flex items-center gap-3">
             <Link
               to="/books/create"
-              className="flex items-center gap-2 bg-white hover:bg-gray-200 text-gray-900 px-8 py-3 rounded-2xl transition-all duration-300 shadow-lg hover:shadow-sky-500/40 active:scale-95"
+              className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
             >
-              <MdOutlineAddBox className="text-2xl" />
-              <span className="font-bold uppercase tracking-wider">Add New Book</span>
+              <MdOutlineAddBox className="text-base" />
+              New ebook
             </Link>
-
             <Link
               to="/admin/orders"
-              className="bg-emerald-500 hover:bg-emerald-400 text-white px-5 py-3 rounded-2xl transition-all duration-300"
+              className="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
             >
               Order Dashboard
             </Link>
-
             <button
               onClick={handleLogout}
-              className="bg-gray-700 hover:bg-gray-600 text-white px-4 py-3 rounded-2xl transition-all duration-300"
+              className="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
             >
               Logout
             </button>
           </div>
         </div>
 
+        <div className="mb-6 flex items-center justify-between">
+          <div className="flex items-center gap-2 text-sm">
+            <button
+              onClick={() => setFilter('all')}
+              className={`rounded-md px-3 py-2 ${filter === 'all' ? 'bg-gray-200 text-gray-900' : 'text-gray-600 hover:bg-gray-200/70'}`}
+            >
+              All
+            </button>
+            <button
+              onClick={() => setFilter('published')}
+              className={`rounded-md px-3 py-2 ${filter === 'published' ? 'bg-gray-200 text-gray-900' : 'text-gray-600 hover:bg-gray-200/70'}`}
+            >
+              Published
+            </button>
+            <button
+              onClick={() => setFilter('draft')}
+              className={`rounded-md px-3 py-2 ${filter === 'draft' ? 'bg-gray-200 text-gray-900' : 'text-gray-600 hover:bg-gray-200/70'}`}
+            >
+              Draft
+            </button>
+          </div>
+
+          <div className="flex items-center gap-2 text-gray-500">
+            <button
+              onClick={() => setViewMode('list')}
+              className={`rounded p-1.5 ${viewMode === 'list' ? 'bg-gray-200 text-gray-800' : 'hover:bg-gray-200'}`}
+            >
+              <FiList className="text-lg" />
+            </button>
+            <button
+              onClick={() => setViewMode('grid')}
+              className={`rounded p-1.5 ${viewMode === 'grid' ? 'bg-gray-200 text-gray-800' : 'hover:bg-gray-200'}`}
+            >
+              <FiGrid className="text-lg" />
+            </button>
+          </div>
+        </div>
+
         {loading ? (
-          <div className="flex justify-center items-center py-20">
+          <div className="flex justify-center py-16">
             <Spinner />
           </div>
-        ) : (
-          /* TABLE CONTAINER: Card style with glassmorphism */
-          <div className="w-full overflow-hidden rounded-3xl border border-gray-700 bg-gray-900/40 backdrop-blur-xl shadow-2xl">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse">
-                <thead>
-                  <tr className="bg-gray-800/60 text-gray-400 text-xs md:text-sm uppercase tracking-[0.2em]">
-                    <th className="py-6 px-8 font-bold">No.</th>
-                    <th className="py-6 px-8 font-bold">Title</th>
-                    <th className="py-6 px-8 font-bold max-md:hidden">Author</th>
-                    <th className="py-6 px-8 font-bold max-md:hidden text-center">Published</th>
-                    <th className="py-6 px-8 font-bold text-center">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-800">
-                  {books.length > 0 ? (
-                    books.map((book, index) => (
-                      <tr 
-                        key={book._id} 
-                        className="group hover:bg-white/5 transition-all duration-200"
-                      >
-                        <td className="py-6 px-8 text-gray-500 font-mono text-sm">
-                          {String(index + 1).padStart(2, '0')}
-                        </td>
-                        <td className="py-6 px-8 text-white font-semibold text-lg md:text-xl">
-                          {book.title}
-                        </td>
-                        <td className="py-6 px-8 text-gray-300 max-md:hidden">
-                          {book.author}
-                        </td>
-                        <td className="py-6 px-8 text-gray-400 max-md:hidden text-center">
-                          {new Date(book.publishedDate).toLocaleDateString(undefined, {
-                            year: 'numeric',
-                            month: 'short',
-                            day: 'numeric'
-                          })}
-                        </td>
-                        <td className="py-6 px-8">
-                          <div className="flex justify-center items-center space-x-6">
-                            <Link 
-                              to={`/books/${book._id}`} 
-                              className="text-sky-400 hover:text-sky-300 transform hover:scale-125 transition-all"
-                            >
-                              <BsInfoCircle className="text-2xl" />
-                            </Link>
-                            <Link 
-                              to={`/books/edit/${book._id}`} 
-                              className="text-emerald-400 hover:text-emerald-300 transform hover:scale-125 transition-all"
-                            >
-                              <AiOutlineEdit className="text-2xl" />
-                            </Link>
-                            <Link 
-                              to={`/books/delete/${book._id}`} 
-                              className="text-rose-500 hover:text-rose-400 transform hover:scale-125 transition-all"
-                            >
-                              <MdOutlineDelete className="text-2xl" />
-                            </Link>
-                          </div>
-                        </td>
-                      </tr>
-                    ))
-                  ) : (
-                    <tr>
-                      <td colSpan="5" className="py-20 text-center text-gray-500 text-lg italic">
-                        Your library is currently empty.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
+        ) : filteredBooks.length === 0 ? (
+          <div className="rounded-xl border border-gray-200 bg-white p-10 text-center text-gray-500">
+            No products found.
           </div>
-        )}
+        ) : (
+          <div className={viewMode === 'grid' ? 'grid gap-4 md:grid-cols-2 xl:grid-cols-3' : 'grid gap-4'}>
+            {filteredBooks.map((book) => {
+              const status = getStatus(book);
+              const image = getDisplayImage(book);
 
-        {/* FOOTER STATS (Optional extra touch) */}
-        {!loading && books.length > 0 && (
-          <div className="mt-6 text-gray-500 text-sm text-center md:text-right px-4">
-            Showing <span className="text-gray-300 font-bold">{books.length}</span> books in your database
+              return (
+                <div key={book._id} className="rounded-xl border border-gray-200 bg-white p-4 shadow-xs">
+                  <div className="mb-4 flex h-56 items-center justify-center rounded-lg bg-gray-50">
+                    {image ? (
+                      <img src={image} alt={book.title} className="h-full w-auto rounded-lg object-cover" />
+                    ) : (
+                      <div className="flex h-44 w-32 items-center justify-center rounded-md bg-gray-900 px-3 text-center text-xs font-semibold text-white">
+                        {book.title}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="mb-3">
+                    <span
+                      className={`inline-flex items-center rounded px-2 py-0.5 text-xs font-medium ${
+                        status === 'published' ? 'bg-green-100 text-green-700' : 'bg-gray-200 text-gray-700'
+                      }`}
+                    >
+                      ● {status === 'published' ? 'Published' : 'Draft'}
+                    </span>
+                  </div>
+
+                  <Link to={`/books/${book._id}`} className="line-clamp-2 text-2xl text-gray-900 hover:text-blue-700">
+                    {book.title}
+                  </Link>
+
+                  <div className="mt-5 grid grid-cols-3 gap-3 border-t border-gray-200 pt-3 text-sm">
+                    <div>
+                      <p className="text-gray-500">Price</p>
+                      <p className="font-medium text-gray-900">{formatCurrency(book.price)}</p>
+                    </div>
+                    <div>
+                      <p className="text-gray-500">Edit</p>
+                      <Link
+                        to={`/books/edit/${book._id}`}
+                        className="font-medium text-blue-600 hover:text-blue-700 hover:underline"
+                      >
+                        Edit Book
+                      </Link>
+                    </div>
+                    <div>
+                      <p className="text-gray-500">Delete</p>
+                      <Link
+                        to={`/books/delete/${book._id}`}
+                        className="font-medium text-red-600 hover:text-red-700 hover:underline"
+                      >
+                        Delete Book
+                      </Link>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         )}
       </div>

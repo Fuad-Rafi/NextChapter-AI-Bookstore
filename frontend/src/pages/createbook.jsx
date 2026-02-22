@@ -11,7 +11,23 @@ const CreateBook = () => {
   const [title, setTitle] = useState('');
   const [author, setAuthor] = useState('');
   const [publishedDate, setPublishedDate] = useState('');
+  const [coverImage, setCoverImage] = useState('');
+  const [price, setPrice] = useState('');
   const [loading, setLoading] = useState(false);
+
+  const handleCoverImageChange = (event) => {
+    const file = event.target.files?.[0];
+    if (!file) {
+      setCoverImage('');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setCoverImage(typeof reader.result === 'string' ? reader.result : '');
+    };
+    reader.readAsDataURL(file);
+  };
 
   const handleSaveBook = async () => {
     if (!title || !author || !publishedDate) {
@@ -25,10 +41,12 @@ const CreateBook = () => {
         title,
         author,
         publishedDate: new Date(publishedDate),
+        coverImage,
+        price: price === '' ? null : Number(price),
       });
       console.log(response.data);
       setLoading(false);
-      navigate('/');
+      navigate('/admin/home');
     } catch (error) {
       console.error('Error creating book:', error);
       setLoading(false);
@@ -57,6 +75,34 @@ const CreateBook = () => {
             value={author}
             onChange={(e) => setAuthor(e.target.value)}
           />
+        </div>
+        <div>
+          <label className="block text-gray-700 mb-2">Price</label>
+          <input
+            type="number"
+            min="0"
+            step="0.01"
+            className="w-full p-2 border border-gray-300 rounded"
+            value={price}
+            onChange={(e) => setPrice(e.target.value)}
+            placeholder="e.g. 49.99"
+          />
+        </div>
+        <div>
+          <label className="block text-gray-700 mb-2">Book Cover Image</label>
+          <input
+            type="file"
+            accept="image/*"
+            className="w-full p-2 border border-gray-300 rounded bg-white"
+            onChange={handleCoverImageChange}
+          />
+          {coverImage && (
+            <img
+              src={coverImage}
+              alt="Cover preview"
+              className="mt-3 h-48 w-32 rounded-md border border-gray-300 object-cover"
+            />
+          )}
         </div>
         <div>
           <label className="block text-gray-700 mb-2">Published Date</label>

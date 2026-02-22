@@ -6,6 +6,21 @@ const OrderHistory = () => {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
 
+  const handleDeleteOrder = async (orderId) => {
+    const shouldDelete = window.confirm('Are you sure you want to delete this order?');
+    if (!shouldDelete) {
+      return;
+    }
+
+    try {
+      await axios.delete(`/orders/${orderId}`);
+      setOrders((prevOrders) => prevOrders.filter((order) => order._id !== orderId));
+    } catch (error) {
+      console.error('Error deleting order:', error);
+      alert(error.response?.data?.message || 'Failed to delete order');
+    }
+  };
+
   useEffect(() => {
     const fetchOrders = async () => {
       try {
@@ -47,6 +62,7 @@ const OrderHistory = () => {
                   <th className="p-3 text-left">Customer</th>
                   <th className="p-3 text-left">Address</th>
                   <th className="p-3 text-left">Phone</th>
+                  <th className="p-3 text-left">Action</th>
                 </tr>
               </thead>
               <tbody>
@@ -60,6 +76,14 @@ const OrderHistory = () => {
                     <td className="p-3 text-slate-700">{order.customerName}</td>
                     <td className="p-3 text-slate-700">{order.customerAddress}</td>
                     <td className="p-3 text-slate-700">{order.customerPhone}</td>
+                    <td className="p-3">
+                      <button
+                        onClick={() => handleDeleteOrder(order._id)}
+                        className="rounded bg-red-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-red-700"
+                      >
+                        Delete
+                      </button>
+                    </td>
                   </tr>
                 ))}
               </tbody>

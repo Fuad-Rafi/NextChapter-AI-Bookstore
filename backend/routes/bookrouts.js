@@ -6,6 +6,19 @@ import { authenticateToken, requireRole } from '../middleware/auth.js';
 
 const router = express.Router();
 
+const parseOptionalPrice = (value) => {
+    if (value === '' || value === null || value === undefined) {
+        return null;
+    }
+
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed) || parsed < 0) {
+        return undefined;
+    }
+
+    return parsed;
+};
+
 // route to get all books
 router.get('/', async (req, res) => {
     try {
@@ -44,7 +57,23 @@ router.get('/:id', async (req, res) => {
 //route to update a new book (admin only)
 router.put('/:id', authenticateToken, requireRole('admin'), async (req, res) => {
     try {
-        const updatedBook = await Book.findByIdAndUpdate(req.params.id, req.body, { new: true });
+        const parsedPrice = parseOptionalPrice(req.body.price);
+        if (parsedPrice === undefined) {
+            return res.status(400).json({ message: 'Invalid price value' });
+        }
+
+        const payload = {
+            title: req.body.title,
+            author: req.body.author,
+            publishedDate: req.body.publishedDate,
+            price: parsedPrice,
+        };
+
+        if (typeof req.body.coverImage === 'string') {
+            payload.coverImage = req.body.coverImage;
+        }
+
+        const updatedBook = await Book.findByIdAndUpdate(req.params.id, payload, { new: true });
 
         if (!updatedBook) {
             return res.status(404).json({ message: 'Book not found' });
@@ -77,15 +106,22 @@ router.delete('/:id', authenticateToken, requireRole('admin'), async (req, res) 
 router.post('/', authenticateToken, requireRole('admin'), async (request, response) => {
     try {
         const publishedDate = request.body.publishedDate ?? request.body.publishYear;
+        const parsedPrice = parseOptionalPrice(request.body.price);
 
         if (!request.body.title || !request.body.author || !publishedDate) {
             return response.status(400).json({ message: 'Missing required fields' });
+        }
+
+        if (parsedPrice === undefined) {
+            return response.status(400).json({ message: 'Invalid price value' });
         }
 
         const newBook = new Book({
             title: request.body.title,
             author: request.body.author,
             publishedDate,
+            coverImage: typeof request.body.coverImage === 'string' ? request.body.coverImage : '',
+            price: parsedPrice,
         });
 
         const savedBook = await newBook.save();

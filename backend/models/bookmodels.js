@@ -13,6 +13,15 @@ const bookSchema = new mongoose.Schema({
     type: Date,
     required: true,
   },
+  coverImage: {
+    type: String,
+    default: '',
+  },
+  price: {
+    type: Number,
+    default: null,
+    min: 0,
+  },
 }, { timestamps: true });
 
 const Book = mongoose.model("Book", bookSchema);
