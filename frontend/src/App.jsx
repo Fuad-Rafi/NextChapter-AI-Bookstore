@@ -11,27 +11,12 @@ import Signup from './pages/signup'
 import CustomerHome from './pages/customerhome'
 import OrderBook from './pages/orderbook'
 import OrderHistory from './pages/orderhistory'
-import { useAuth } from './hooks/useAuth'
 import { RequireAuth, RequireRole } from './components/ProtectedRoute'
-
-const RoleLanding = () => {
-  const { isAuthenticated, role } = useAuth()
-
-  if (!isAuthenticated) {
-    return <Navigate to="/login" replace />
-  }
-
-  if (role === 'admin') {
-    return <Navigate to="/admin/home" replace />
-  }
-
-  return <Navigate to="/customer/home" replace />
-}
 
 const App = () => {
   return (
     <Routes>
-      <Route path="/" element={<RoleLanding />} />
+      <Route path="/" element={<Login />} />
       <Route path="/login" element={<Login />} />
       <Route path="/signup" element={<Signup />} />
 

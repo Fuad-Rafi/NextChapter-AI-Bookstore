@@ -1,9 +1,7 @@
 import { useState } from 'react';
-import axios from 'axios';
 import { Link, Navigate, useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
-
-const API_BASE = 'http://localhost:5000';
+import api from '../utils/axios';
 
 const Signup = () => {
   const { isAuthenticated, role, setSession } = useAuth();
@@ -35,7 +33,7 @@ const Signup = () => {
 
     try {
       setLoading(true);
-      const response = await axios.post(`${API_BASE}/auth/signup`, {
+      const response = await api.post('/auth/signup', {
         name: name.trim(),
         email: email.trim(),
         password,

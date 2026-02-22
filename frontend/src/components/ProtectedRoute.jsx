@@ -16,7 +16,7 @@ export const RequireRole = ({ role }) => {
   const { role: currentRole } = useAuth();
 
   if (currentRole !== role) {
-    return <Navigate to="/" replace />;
+    return <Navigate to="/login" replace />;
   }
 
   return <Outlet />;

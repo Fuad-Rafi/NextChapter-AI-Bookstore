@@ -1,9 +1,7 @@
 import { useState } from 'react';
-import axios from 'axios';
 import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
-
-const API_BASE = 'http://localhost:5000';
+import api from '../utils/axios';
 
 const Login = () => {
   const { isAuthenticated, role, setSession } = useAuth();
@@ -42,7 +40,7 @@ const Login = () => {
           ? { role: 'admin', username: username.trim(), password }
           : { email: email.trim(), password };
 
-      const response = await axios.post(`${API_BASE}/auth/login`, body);
+      const response = await api.post('/auth/login', body);
       setSession(response.data);
 
       const redirectedPath = location.state?.from?.pathname;
