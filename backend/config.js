@@ -20,6 +20,13 @@ export const RATE_LIMIT_AUTH_LOGIN_PER_MINUTE = Number(process.env.RATE_LIMIT_AU
 export const EMBEDDING_MODEL = process.env.EMBEDDING_MODEL || 'Xenova/all-MiniLM-L6-v2';
 export const REC_SEMANTIC_WEIGHT = Number(process.env.REC_SEMANTIC_WEIGHT || 2.5);
 
+// Qdrant configuration
+export const QDRANT_ENABLED = String(process.env.QDRANT_ENABLED || '').trim().startsWith('1');
+export const QDRANT_URL = String(process.env.QDRANT_URL || '').trim();
+export const QDRANT_API_KEY = String(process.env.QDRANT_API_KEY || '').trim();
+export const QDRANT_COLLECTION = String(process.env.QDRANT_COLLECTION || 'books').trim();
+export const QDRANT_SEARCH_LIMIT = Number(process.env.QDRANT_SEARCH_LIMIT || 40);
+
 export const validateEnvironment = () => {
 	if (!mongoDBURL) {
 		throw new Error('MONGODB_URL is required');
@@ -35,10 +42,15 @@ export const validateEnvironment = () => {
 		throw new Error('GROQ_API_KEY is required when REQUIRE_GROQ_API_KEY=1');
 	}
 
+	if (QDRANT_ENABLED && !QDRANT_URL) {
+		throw new Error('QDRANT_URL is required when QDRANT_ENABLED=1');
+	}
+
 	const numericLimits = [
 		['RATE_LIMIT_ASSISTANT_CHAT_PER_MINUTE', RATE_LIMIT_ASSISTANT_CHAT_PER_MINUTE],
 		['RATE_LIMIT_ASSISTANT_FEEDBACK_PER_MINUTE', RATE_LIMIT_ASSISTANT_FEEDBACK_PER_MINUTE],
 		['RATE_LIMIT_AUTH_LOGIN_PER_MINUTE', RATE_LIMIT_AUTH_LOGIN_PER_MINUTE],
+		['QDRANT_SEARCH_LIMIT', QDRANT_SEARCH_LIMIT],
 	];
 
 	for (const [name, value] of numericLimits) {

@@ -2,6 +2,7 @@ import express from 'express';
 import Book from '../models/bookmodels.js';
 import { authenticateToken, optionalAuthenticateToken, requireRole } from '../middleware/auth.js';
 import { normalizeBookPayload } from '../utils/ragData.js';
+import { deleteBookPoint, upsertBookPoint } from '../services/qdrantService.js';
 
 const router = express.Router();
 
@@ -96,6 +97,14 @@ router.put('/:id', authenticateToken, requireRole('admin'), async (req, res) => 
             return res.status(404).json({ message: 'Book not found' });
         }
 
+        if (updatedBook.embedding?.length) {
+            try {
+                await upsertBookPoint(updatedBook);
+            } catch (error) {
+                console.warn('Qdrant update sync failed:', error.message);
+            }
+        }
+
         res.json(updatedBook);
     } catch (error) {
         console.error('Error updating book:', error.message);
@@ -110,6 +119,12 @@ router.delete('/:id', authenticateToken, requireRole('admin'), async (req, res) 
 
         if (!deletedBook) {
             return res.status(404).json({ message: 'Book not found' });
+        }
+
+        try {
+            await deleteBookPoint(req.params.id);
+        } catch (error) {
+            console.warn('Qdrant delete sync failed:', error.message);
         }
 
         res.json({ message: 'Book deleted successfully' });
@@ -137,6 +152,15 @@ router.post('/', authenticateToken, requireRole('admin'), async (request, respon
         });
 
         const savedBook = await newBook.save();
+
+        if (savedBook.embedding?.length) {
+            try {
+                await upsertBookPoint(savedBook);
+            } catch (error) {
+                console.warn('Qdrant create sync failed:', error.message);
+            }
+        }
+
         response.status(201).json(savedBook);
     } catch (error) {
         console.error('Error creating book:', error.message);

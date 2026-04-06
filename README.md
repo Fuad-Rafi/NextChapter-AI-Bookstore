@@ -1,187 +1,361 @@
-# MERN Book Platform
+﻿# MERN Book Platform with RAG Assistant
 
-Last updated: 2026-02-21
+Last updated: 2026-04-07
 
-A role-based MERN application for book management and ordering.
-- **Admin** manages books and monitors all orders.
-- **Customer** signs up, logs in, browses available books, and places orders.
+A full-stack MERN application for book catalog browsing, ordering, and AI-assisted recommendations.
 
-## Tech Stack
-- **Backend:** Node.js, Express 5, MongoDB, Mongoose, JWT, bcryptjs, CORS
-- **Frontend:** React 19, Vite 7, React Router 7, Axios, Tailwind CSS 4
+The platform includes:
+- Role-based auth (admin and customer flows)
+- Book management and order management
+- Retrieval-Augmented Generation (RAG) recommendation assistant
+- Persistent conversational memory and feedback-driven ranking
+- Hybrid semantic retrieval: Qdrant vector search with Mongo fallback
 
-## Project Structure
-```text
-blog-mern/
-├── backend/
-│   ├── config.js
-│   ├── index.js
-│   ├── middleware/auth.js
-│   ├── models/
-│   │   ├── bookmodels.js
-│   │   ├── ordermodel.js
-│   │   └── usermodel.js
-│   ├── routes/
-│   │   ├── authroutes.js
-│   │   ├── bookrouts.js
-│   │   └── orderroutes.js
-│   └── .env.example
-└── frontend/
-    └── src/
-        ├── components/ProtectedRoute.jsx
-        ├── context/AuthContext.jsx
-        ├── pages/
-        └── utils/axios.js
-```
+## Table of Contents
+- Overview
+- What Is Implemented
+- RAG Architecture
+- Recommendation Engine
+- Data Model
+- Tech Stack and Tools
+- Repository Structure
+- Local Development Setup
+- Environment Variables
+- Scripts
+- API Summary
+- Deployment (Vercel)
+- Testing
+- Troubleshooting
+- Roadmap
 
-## Core Features
+## Overview
+This project combines a traditional e-commerce-style book app with an assistant that understands natural language requests like:
+- "I like Stephen King"
+- "fast-paced mystery under Tk 400"
+- "show me more like the second one"
 
-### 1. Book Management (CRUD Operations)
+The assistant extracts preferences, merges them with saved memory, retrieves candidate books semantically, ranks them using a weighted scoring model, and returns chat responses plus recommendation cards.
 
-#### Create Books
-- Form-based book creation with input validation.
-- Required fields: title, author, and published date.
-- Automatic timestamp generation using `createdAt` and `updatedAt`.
-- Validation error handling with clear form feedback.
-- Responsive form layout for desktop, tablet, and mobile users.
+## What Is Implemented
 
-#### Read Books
-- Display all books in a dedicated list view.
-- Show individual book details in a separate detailed page.
-- Enable users to browse and filter through the book catalog.
-- Responsive grid/list presentation for different screen sizes.
-- Display key metadata such as title, author, and publication date.
+### Core Application
+- Customer signup/login using JWT
+- Admin login and role-based protected routes
+- Book CRUD (admin)
+- Customer ordering flow
+- Catalog and detail views
 
-#### Update Books
-- Edit existing book records from the update page.
-- Modify title, author, and published date fields.
-- Real-time form validation while editing.
-- Success feedback after update completion.
-- Redirect users to the updated book details view on success.
+### Assistant + RAG
+- Chat endpoint with rate limiting
+- Preference extraction from natural language
+- Conversation memory persistence in MongoDB
+- Feedback endpoint (like/dislike/click/view)
+- Semantic relevance using embeddings (Xenova all-MiniLM-L6-v2)
+- Qdrant vector retrieval (optional, enabled by flag)
+- Automatic fallback to Mongo cosine search if Qdrant is unavailable
+- Ranked recommendation output returned directly to UI
 
-#### Delete Books
-- Delete books through a confirmation-driven flow.
-- Prevent accidental deletion using a dedicated confirmation page.
-- Permanently remove selected books from the database.
-- Redirect users back to the book list after successful deletion.
+### Recent Enhancements
+- Fixed empty recommendation regression by removing fragile title-matching dependency
+- Added author preference extraction and author-aware ranking boost
+- Added memory snapshot fields for preferred authors
+- Added catalog fallback cache in frontend when live API fetch fails
+- Added safety logging and configurable request limits
+- Added Qdrant integration service (`qdrantService`) with collection auto-create
+- Added vector sync tooling (`npm run qdrant:sync`) and embedding/CRUD sync hooks
+- Reduced built-in history dominance in ranking defaults (`historyMatch` fallback set to `0.8`)
 
-### 2. User Interface Features
+## RAG Architecture
 
-#### Navigation
-- Clean and intuitive route structure across the application.
-- Reusable back button component for quick return navigation.
-- Route-based page transitions using React Router.
-- Responsive navigation behavior across devices.
+### High-Level Flow
+1. User sends a message in the assistant panel.
+2. Backend validates auth and input.
+3. System extracts signals from message:
+- Preferred genres
+- Disliked genres
+- Preferred authors
+- Budget min/max
+- Pace and length preferences
+4. System merges memory in priority order:
+- Current message
+- Current conversation profile
+- Saved user preferences
+5. Recommendation query text is assembled from message + memory.
+6. Query embedding is generated with Xenova all-MiniLM-L6-v2.
+7. Candidate books are retrieved via vector search and scored using lexical + semantic + behavior signals.
+8. Top ranked books are returned to chat response.
+9. Conversation + memory + feedback state are saved for continuity.
 
-#### Loading States
-- Reusable spinner component for loading scenarios.
-- Visual feedback during API calls and page-level data fetching.
-- Smooth transition experience between data states and pages.
+### Components Used in RAG
+- `backend/services/memoryService.js`
+- `backend/services/embeddingService.js`
+- `backend/services/qdrantService.js`
+- `backend/services/recommendationService.js`
+- `backend/services/vectorSearchService.js`
+- `backend/utils/recommendationScoring.js`
+- `backend/routes/assistantchat.js`
 
-#### Responsive Design
-- Mobile-first styling approach using Tailwind CSS.
-- Responsive layouts optimized for all major screen sizes.
-- Utility-first Tailwind class usage for consistent UI styling.
-- Cross-browser compatible interface behavior.
+### Why This Is RAG
+The assistant is grounded in your catalog data and historical interaction signals. It does not generate arbitrary recommendations from outside context. It retrieves and ranks known books, then generates response text from those candidates.
 
-### 3. API Features
+### Retrieval Modes
+- `QDRANT_ENABLED=1`: query vectors are searched in Qdrant first, then hydrated from Mongo for ranking and response output.
+- `QDRANT_ENABLED=0` (or runtime retrieval failure): search falls back to Mongo cosine similarity path.
 
-#### RESTful API Design
-- Standard HTTP methods: `GET`, `POST`, `PUT`, and `DELETE`.
-- JSON-based request and response payloads.
-- Proper HTTP status code usage for success and error states.
-- Centralized error handling and request validation.
+## Recommendation Engine
 
-#### CORS Configuration
-- Cross-Origin Resource Sharing enabled on backend services.
-- Development origin support for `http://localhost:5173`.
-- Credentials and custom header support for frontend integration.
+### Scoring Inputs
+- Query token overlap
+- Semantic similarity (query embedding vs book embedding)
+- User preference match
+- Purchase history similarity
+- Feedback profile match
+- Book popularity prior (rating)
+- Diversity boost
+- Penalties for dislikes/disliked feedback
+- Explicit author preference boost
 
-## API Access Rules
+### Behavior Notes
+- Budget max is also hard-filtered in chat response stage.
+- Ordered books are excluded from recommendation candidates where applicable.
+- If embedding generation fails, scoring gracefully falls back to token-based relevance.
+- Default history weight fallback in code is intentionally lowered (`historyMatch = 0.8`) to reduce over-personalization from old behavior.
 
-### Auth
-- `POST /auth/signup` → Public
-- `POST /auth/login` → Public
-- `POST /auth/logout` → Logout flow endpoint
+## Data Model
 
-### Books
-- `GET /books` → Public (returns un-ordered books)
-- `GET /books/:id` → Public API (used in authenticated app flow)
-- `POST /books` → Admin only
-- `PUT /books/:id` → Admin only
-- `DELETE /books/:id` → Admin only
+### Collections
+- `users`
+- `books`
+- `orders`
+- `chatmemories`
 
-### Orders
-- `POST /orders` → Customer only
-- `GET /orders` → Admin only
+### Important Fields
 
-## Data Models
-- **User**: `name`, `email` (unique), `password` (hashed), `role` (`customer`)
-- **Book**: `title`, `author`, `publishedDate`, timestamps
-- **Order**: `bookId`, `bookTitle`, `bookAuthor`, `customerName`, `customerAddress`, `customerPhone`, timestamps
+User
+- `preferences.preferredGenres`
+- `preferences.dislikedGenres`
+- `preferences.preferredAuthors`
+- `preferences.budgetRange`
+- `feedbackProfile` (liked/disliked/clicked/viewed book ids)
+- `assistantMemory` (summary and timestamps)
 
-## Security Measures Implemented
+Book
+- Metadata fields (`title`, `author`, `genre`, `tags`, `themes`, `subjects`, `price`, `rating`)
+- `embedding` (384-dim vector)
+- `semanticMetadata` (embeddedAt, modelVersion)
 
-### Authentication & Authorization
-- JWT verification middleware checks bearer token from `Authorization` header.
-- Token expiry enforced server-side.
-- Role-based middleware (`requireRole`) enforces endpoint access.
-- Status boundaries:
-  - `401` for missing/expired authentication
-  - `403` for invalid token / insufficient permissions
+ChatMemory
+- `messages[]` with per-turn extracted preferences
+- `memoryProfile`
+- `summary`
+- `lastMessageAt`
 
-### Password Security
-- Customer passwords hashed with `bcryptjs` (10 rounds).
-- Password checks use secure bcrypt comparison.
-- Admin password supports bcrypt-hash in environment config.
-- Plaintext admin password fallback exists for compatibility, but should be removed in production.
-
-### Frontend Token Security
-- Central Axios instance auto-attaches `Authorization: Bearer <token>`.
-- Global `401` response handling clears local auth and redirects to login.
-- Logout clears token/user state from client storage.
-
-### CORS and Configuration Security
-- CORS configured with explicit origins and allowed headers.
-- `Authorization` header is allowed for bearer auth.
-- Sensitive values are environment-driven via `.env`.
-
-## Environment Configuration
-Create `backend/.env` from `backend/.env.example`.
-
-Required variables:
-```env
-PORT=5000
-CORS_ORIGIN=http://localhost:5173
-MONGODB_URL=mongodb://localhost:27017/blog
-JWT_SECRET=your-super-secret-jwt-key-change-this-in-production
-JWT_EXPIRES_IN=7d
-ADMIN_USERNAME=admin
-ADMIN_PASSWORD=<bcrypt-hash>
-```
-
-Generate admin password hash:
-```bash
-node -e "const bcrypt = require('bcryptjs'); bcrypt.hash('your-password', 10).then(console.log);"
-```
-
-## Setup and Run
+## Tech Stack and Tools
 
 ### Backend
+- Node.js
+- Express 5
+- MongoDB + Mongoose
+- JSON Web Token (`jsonwebtoken`)
+- `bcryptjs`
+- CORS
+- `nodemon`
+
+### AI / RAG
+- `@xenova/transformers`
+- Model: `Xenova/all-MiniLM-L6-v2`
+- Qdrant (`@qdrant/js-client-rest`) for vector retrieval
+- Local embedding generation + optional vector DB storage
+- Optional Groq response generation (with fallback behavior when key unavailable)
+
+### Frontend
+- React 19
+- Vite 7
+- React Router 7
+- Axios
+- Zustand
+- React Hook Form
+- Tailwind CSS 4
+- React Icons
+
+### Testing / Quality
+- Node built-in test runner (`node --test`)
+- `mongodb-memory-server`
+- `supertest`
+- ESLint
+
+## Repository Structure
+
+```text
+backend/
+  config.js
+  index.js
+  middleware/
+    auth.js
+    rateLimit.js
+  models/
+    bookmodels.js
+    chatmemorymodel.js
+    ordermodel.js
+    usermodel.js
+  routes/
+    assistantchat.js
+    authroutes.js
+    bookrecommendations.js
+    bookrouts.js
+    orderroutes.js
+  scripts/
+    backfillPhase1.mjs
+    embedBooks.mjs
+    seedPhase2Books.mjs
+    seedPhase3Books.mjs
+    syncQdrant.mjs
+  services/
+    embeddingService.js
+    llmService.js
+    memoryService.js
+    qdrantService.js
+    recommendationService.js
+    vectorSearchService.js
+  test/
+    phase4.test.mjs
+    phase5.test.mjs
+    phase7.test.mjs
+    phase8.test.mjs
+  utils/
+    ragData.js
+    recommendationScoring.js
+    securityLogger.js
+
+frontend/
+  api/
+    [...path].js
+  src/
+    components/
+    context/
+    hooks/
+    pages/
+    store/
+    utils/
+```
+
+## Local Development Setup
+
+### Prerequisites
+- Node.js 18+ (recommended)
+- npm
+- MongoDB local instance (default URI used in `.env`)
+- Optional: local Qdrant at `http://localhost:6333`
+
+### 1) Install dependencies
+
+Backend:
 ```bash
 cd backend
 npm install
-npm run dev
 ```
 
-### Frontend
+Frontend:
 ```bash
 cd frontend
 npm install
+```
+
+### 2) Configure environment
+Create `backend/.env` and set required values.
+
+### 3) Seed data
+```bash
+cd backend
+npm run seed:phase2
+```
+
+Optional extended catalog:
+```bash
+npm run seed:phase3
+```
+
+### 4) (Optional) generate embeddings
+```bash
+npm run embed:books
+```
+
+### 5) (Optional) sync vectors to Qdrant
+```bash
+npm run qdrant:sync
+```
+
+### 6) Run services
+
+Backend:
+```bash
+cd backend
 npm run dev
 ```
 
-Frontend scripts:
+Frontend:
+```bash
+cd frontend
+npm run dev
+```
+
+Default local URLs:
+- Backend: `http://localhost:5000`
+- Frontend: `http://localhost:5173` (or next free Vite port)
+
+## Environment Variables
+
+Example backend `.env` keys:
+
+```env
+PORT=5000
+MONGODB_URL=mongodb://localhost:27017/blog
+CORS_ORIGIN=http://localhost:5173
+
+JWT_SECRET=change-this
+JWT_EXPIRES_IN=7d
+
+ADMIN_USERNAME=admin
+ADMIN_PASSWORD=admin123
+
+REQUIRE_GROQ_API_KEY=0
+GROQ_API_KEY=
+
+RATE_LIMIT_AUTH_LOGIN_PER_MINUTE=20
+RATE_LIMIT_ASSISTANT_CHAT_PER_MINUTE=20
+RATE_LIMIT_ASSISTANT_FEEDBACK_PER_MINUTE=40
+
+# Optional recommendation tuning
+REC_HISTORY_WEIGHT=0.8
+
+# Optional Qdrant vector retrieval
+QDRANT_ENABLED=0
+QDRANT_URL=
+QDRANT_API_KEY=
+QDRANT_COLLECTION=books
+QDRANT_SEARCH_LIMIT=40
+```
+
+Notes:
+- Keep `REQUIRE_GROQ_API_KEY=0` if you want local fallback reply behavior without provider dependency.
+- For local Docker Qdrant, set `QDRANT_URL=http://localhost:6333` and keep `QDRANT_API_KEY=` empty.
+- Never commit secrets to public repositories.
+
+## Scripts
+
+### Backend scripts
+```bash
+npm run dev
+npm run start
+npm run test
+npm run seed:phase2
+npm run seed:phase3
+npm run embed:books
+npm run qdrant:sync
+npm run backfill:phase1
+```
+
+### Frontend scripts
 ```bash
 npm run dev
 npm run build
@@ -189,107 +363,100 @@ npm run preview
 npm run lint
 ```
 
-Frontend development notes:
-- Vite provides HMR for fast local development.
-- React Compiler is not enabled in this setup by default.
-- If you migrate to TypeScript, enable type-aware lint rules (`typescript-eslint`).
+## API Summary
 
-Default URLs:
-- Backend: `http://localhost:5000`
-- Frontend: `http://localhost:5173`
+### Auth
+- `POST /auth/signup`
+- `POST /auth/login`
 
-## Deploy on Vercel
+### Books
+- `GET /books`
+- `GET /books/:id`
+- `POST /books` (admin)
+- `PUT /books/:id` (admin)
+- `DELETE /books/:id` (admin)
 
-Use **two Vercel projects** from this same repo:
+### Orders
+- `POST /orders` (customer)
+- `GET /orders` (admin)
 
-### 1) Backend Project (Root Directory: `backend`)
-1. Import repo in Vercel and set Root Directory to `backend`.
-2. Vercel will use `backend/vercel.json` to run Express as a serverless function.
-3. Add backend env vars in Vercel:
-  - `MONGODB_URL`
-  - `JWT_SECRET`
-  - `JWT_EXPIRES_IN`
-  - `ADMIN_USERNAME`
-  - `ADMIN_PASSWORD`
-  - `CORS_ORIGIN` = your frontend Vercel URL (or multiple comma-separated URLs)
-4. Deploy and copy the backend URL (example: `https://your-backend.vercel.app`).
+### Assistant / Recommendations
+- `GET /books/recommendations` (customer)
+- `POST /assistant/chat` (customer)
+- `POST /assistant/feedback` (customer)
 
-### 2) Frontend Project (Root Directory: `frontend`)
-1. Import repo in Vercel and set Root Directory to `frontend`.
-2. Add env var:
-  - `BACKEND_URL` = backend URL from step 1.
-3. Deploy frontend.
+## Deployment (Vercel)
 
-### Notes
-- Frontend now calls `/api` by default; in Vercel this is proxied by `frontend/api/[...path].js` to `BACKEND_URL`.
-- In local dev, Vite proxies `/api` to `http://localhost:5000`.
-- Health check endpoint: `GET /api/health` on frontend returns proxy status and backend reachability.
-- Backend does not use `PORT` on Vercel; local `npm run dev` still works as before.
+Use separate Vercel projects for backend and frontend.
 
-## Security Testing Checklist
+### Backend
+- Root directory: `backend`
+- Uses `backend/vercel.json`
+- Set env vars (Mongo, JWT, rate limits, optional Groq key, optional Qdrant settings)
 
-### Authentication
-- Protected routes reject requests without token.
-- Invalid token returns `401/403` as expected.
-- Expired token causes client redirect to login.
-- Customer cannot access admin-only routes.
-- Admin cannot access customer-only routes.
+### Frontend
+- Root directory: `frontend`
+- Uses rewrite/proxy setup + `frontend/api/[...path].js`
+- Set `BACKEND_URL` to deployed backend URL
 
-### Password and Session
-- Customer passwords are stored hashed in DB.
-- Admin login works with hashed admin password.
-- Invalid credentials are rejected.
-- Logout clears local auth state.
+Health probe via frontend proxy:
+- `GET /api/health`
 
-### Authorization Rules
-- `POST/PUT/DELETE /books` requires admin token.
-- `POST /orders` requires customer token.
-- `GET /orders` requires admin token.
+## Testing
 
-## cURL Security Verification Samples
+Run backend tests:
 ```bash
-# Customer signup
-curl -X POST http://localhost:5000/auth/signup -H "Content-Type: application/json" -d '{"name":"Test User","email":"test@example.com","password":"password123"}'
-
-# Customer login
-curl -X POST http://localhost:5000/auth/login -H "Content-Type: application/json" -d '{"email":"test@example.com","password":"password123"}'
-
-# Unauthorized admin action (should fail)
-curl -X POST http://localhost:5000/books -H "Content-Type: application/json" -d '{"title":"Test","author":"Author","publishedDate":"2024"}'
-
-# Admin login
-curl -X POST http://localhost:5000/auth/login -H "Content-Type: application/json" -d '{"role":"admin","username":"admin","password":"admin123"}'
+cd backend
+npm test
 ```
 
-## Known Limitations
-- Stateless JWT logout does not revoke already-issued tokens server-side.
-- Token storage in local storage is more XSS-sensitive than httpOnly cookies.
-- Single admin account model (no multi-admin management).
-- No login rate limiting or brute-force lockout yet.
-- Development defaults use HTTP; production must use HTTPS.
+Current test focus includes:
+- Chat memory continuity
+- Feedback-to-ranking behavior
+- Endpoint authorization
+- Rate limiting behavior
+- Security logger redaction
 
-## Production Security Checklist
+## Troubleshooting
 
-### Required
-1. Use HTTPS/TLS end-to-end.
-2. Set strong `JWT_SECRET` (32+ random chars).
-3. Use bcrypt-hashed admin password.
-4. Use secured MongoDB connection/authentication.
-5. Never commit `.env`.
-6. Restrict CORS to exact production origins.
+### Products page shows empty list
+- Ensure backend is running.
+- Ensure MongoDB is running.
+- Reseed catalog:
+```bash
+cd backend
+npm run seed:phase2
+```
 
-### Recommended
-1. Add `express-rate-limit` on auth endpoints.
-2. Add request validation/sanitization middleware.
-3. Add `helmet` security headers.
-4. Add refresh token and revocation strategy.
-5. Add structured logging and monitoring.
-6. Run dependency checks (`npm audit`) regularly.
-7. Add CSP policy and CSRF strategy if moving to cookie sessions.
+### Assistant returns weak or generic results
+- Confirm books exist in database.
+- Run embedding generation if semantic layer is missing:
+```bash
+npm run embed:books
+```
+- If Qdrant is enabled, sync vectors:
+```bash
+npm run qdrant:sync
+```
 
-### Optional
-1. Token blacklist (e.g., Redis).
-2. 2FA for admin account.
-3. Account lockout after repeated failed logins.
-4. Email verification flow for customer signup.
-5. Audit trail for sensitive admin actions.
+### Qdrant shows disabled during sync
+- Ensure `QDRANT_ENABLED=1` and `QDRANT_URL` are set in backend `.env`.
+- For local Docker Qdrant use `QDRANT_URL=http://localhost:6333`.
+- Keep `QDRANT_API_KEY=` empty for local HTTP setup.
+
+### Author preference not reflected
+- Use prompts like: "I like Stephen King" or "books by Stephen King".
+- Ensure backend restarted after config or schema changes.
+
+### Frontend starts on another port
+Vite auto-picks next free port (for example 5174). This is expected.
+
+## Roadmap
+- Improve typo tolerance and fuzzy author matching
+- Add richer preference extraction (language, series, publication period)
+- Add observability dashboard for ranking breakdowns
+- Add token revocation and stronger session controls
+- Expand seed catalog and metadata richness
+
+---
+If you want, the next step can be a companion `ARCHITECTURE.md` with sequence diagrams and per-file responsibilities for onboarding new developers quickly.

@@ -2,6 +2,7 @@ import Book from '../models/bookmodels.js';
 import Order from '../models/ordermodel.js';
 import User from '../models/usermodel.js';
 import { buildHistorySignals, rankBooks } from '../utils/recommendationScoring.js';
+import { getUnifiedVectorSearch } from './vectorSearchService.js';
 
 export const getRankedRecommendations = async ({ userId, query = '', queryEmbedding, limit = 5, mergedMemoryProfile = {} }) => {
   const [user, books, orders] = await Promise.all([
@@ -24,7 +25,31 @@ export const getRankedRecommendations = async ({ userId, query = '', queryEmbedd
   );
 
   const candidates = books.filter((book) => !orderedBookIds.has(String(book._id)));
-  const inputBooks = candidates.length > 0 ? candidates : books;
+
+  let semanticCandidates = [];
+  if (Array.isArray(queryEmbedding) && queryEmbedding.length > 0) {
+    const vectorFilters = {
+      genres: userPreferences.preferredGenres || [],
+      minPrice: userPreferences.budgetMin,
+      maxPrice: userPreferences.budgetMax,
+    };
+
+    semanticCandidates = await getUnifiedVectorSearch(
+      queryEmbedding,
+      vectorFilters,
+      Math.max(limit * 8, 40)
+    );
+  }
+
+  const semanticIds = new Set(
+    semanticCandidates
+      .map((book) => String(book._id || ''))
+      .filter(Boolean)
+  );
+
+  const inputBooks = semanticIds.size > 0
+    ? candidates.filter((book) => semanticIds.has(String(book._id)))
+    : (candidates.length > 0 ? candidates : books);
 
   const ranked = rankBooks({
     books: inputBooks,

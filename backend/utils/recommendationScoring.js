@@ -3,7 +3,7 @@ const DEFAULT_WEIGHTS = {
   popularityPrior: Number(process.env.REC_POPULARITY_WEIGHT ?? 1.1),
   diversityBoost: Number(process.env.REC_DIVERSITY_WEIGHT ?? 0.6),
   preferenceMatch: Number(process.env.REC_PREFERENCE_WEIGHT ?? 2.2),
-  historyMatch: Number(process.env.REC_HISTORY_WEIGHT ?? 1.8),
+  historyMatch: Number(process.env.REC_HISTORY_WEIGHT ?? 0.8),
   dislikePenalty: Number(process.env.REC_DISLIKE_WEIGHT ?? 3),
   feedbackMatch: Number(process.env.REC_FEEDBACK_WEIGHT ?? 2.1),
   feedbackPenalty: Number(process.env.REC_FEEDBACK_PENALTY_WEIGHT ?? 3.3),

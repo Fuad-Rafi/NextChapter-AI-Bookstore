@@ -2,6 +2,7 @@ import mongoose from 'mongoose';
 import { mongoDBURL } from '../config.js';
 import Book from '../models/bookmodels.js';
 import * as embeddingService from '../services/embeddingService.js';
+import { upsertBookPoint } from '../services/qdrantService.js';
 
 const EMBEDDING_MODEL_VERSION = 'Xenova/all-MiniLM-L6-v2';
 
@@ -60,6 +61,14 @@ const embedBooks = async () => {
           },
           { new: true }
         );
+
+        if (updated?.embedding?.length) {
+          try {
+            await upsertBookPoint(updated);
+          } catch (syncError) {
+            console.warn(`⚠️ Qdrant sync skipped for "${updated.title}": ${syncError.message}`);
+          }
+        }
 
         embeddedCount++;
 
