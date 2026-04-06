@@ -51,7 +51,7 @@ const CustomerHome = () => {
 
   const formatCurrency = (value) => {
     if (typeof value !== 'number') return '-';
-    return `$${value.toFixed(2)}`;
+    return `Tk ${value.toFixed(2)}`;
   };
 
   return (
@@ -154,6 +154,9 @@ const CustomerHome = () => {
                   </div>
 
                   <h2 className="line-clamp-2 text-2xl text-gray-900">{book.title}</h2>
+                  <p className="mt-2 line-clamp-3 text-sm leading-6 text-gray-600">
+                    {book.synopsis || book.description || 'No synopsis available.'}
+                  </p>
 
                   <div className="mt-5 grid grid-cols-3 gap-3 border-t border-gray-200 pt-3 text-sm">
                     <div>

@@ -1,6 +1,7 @@
 import express from 'express';
 import Order from '../models/ordermodel.js';
 import { authenticateToken, requireRole } from '../middleware/auth.js';
+import { normalizeOrderPayload } from '../utils/ragData.js';
 
 const router = express.Router();
 
@@ -19,40 +20,30 @@ router.get('/', authenticateToken, requireRole('admin'), async (req, res) => {
 
 router.post('/', authenticateToken, requireRole('customer'), async (req, res) => {
   try {
-    const {
-      bookId,
-      bookTitle,
-      bookAuthor,
-      customerName,
-      customerAddress,
-      customerPhone,
-    } = req.body;
+    const normalizedOrder = normalizeOrderPayload(req.body, req.user?.id);
 
     if (
-      !bookId ||
-      !bookTitle ||
-      !bookAuthor ||
-      !customerName ||
-      !customerAddress ||
-      !customerPhone
+      !normalizedOrder.bookId ||
+      !normalizedOrder.bookTitle ||
+      !normalizedOrder.bookAuthor ||
+      !normalizedOrder.customerName ||
+      !normalizedOrder.customerAddress ||
+      !normalizedOrder.customerPhone
     ) {
       return res.status(400).json({ message: 'Missing required order fields' });
     }
 
-    const normalizedBookId = String(bookId).trim();
-    const existingOrder = await Order.findOne({ bookId: normalizedBookId });
+    const existingOrder = await Order.findOne({
+      bookId: normalizedOrder.bookId,
+      customerId: normalizedOrder.customerId,
+    });
 
     if (existingOrder) {
       return res.status(409).json({ message: 'This book is already ordered' });
     }
 
     const newOrder = await Order.create({
-      bookId: normalizedBookId,
-      bookTitle: String(bookTitle).trim(),
-      bookAuthor: String(bookAuthor).trim(),
-      customerName: String(customerName).trim(),
-      customerAddress: String(customerAddress).trim(),
-      customerPhone: String(customerPhone).trim(),
+      ...normalizedOrder,
     });
 
     return res.status(201).json({

@@ -5,7 +5,11 @@
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
-    "dev": "nodemon index.js"
+    "dev": "nodemon index.js",
+    "test": "node --test",
+    "test:phase1": "node --test test/phase1.test.mjs",
+    "backfill:phase1": "node scripts/backfillPhase1.mjs",
+    "seed:phase2": "node scripts/seedPhase2Books.mjs"
   },
   "keywords": [],
   "author": "",
@@ -19,5 +23,9 @@
     "jsonwebtoken": "^9.0.2",
     "mongoose": "^9.2.0",
     "nodemon": "^3.1.11"
+  },
+  "devDependencies": {
+    "mongodb-memory-server": "^10.3.0",
+    "supertest": "^7.1.4"
   }
 }

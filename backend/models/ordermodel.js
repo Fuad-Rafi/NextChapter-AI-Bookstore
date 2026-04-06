@@ -7,6 +7,11 @@ const orderSchema = new mongoose.Schema(
       required: true,
       trim: true,
     },
+    bookRef: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Book',
+      default: null,
+    },
     bookTitle: {
       type: String,
       required: true,
@@ -31,6 +36,12 @@ const orderSchema = new mongoose.Schema(
       type: String,
       required: true,
       trim: true,
+    },
+    customerId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      default: null,
+      index: true,
     },
   },
   { timestamps: true }

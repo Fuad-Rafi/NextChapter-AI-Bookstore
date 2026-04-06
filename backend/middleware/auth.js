@@ -34,6 +34,33 @@ export const authenticateToken = (req, res, next) => {
 };
 
 /**
+ * Middleware to attach req.user when a valid token exists.
+ * Unlike authenticateToken, this never blocks the request.
+ */
+export const optionalAuthenticateToken = (req, res, next) => {
+  try {
+    const authHeader = req.headers['authorization'];
+    const token = authHeader && authHeader.startsWith('Bearer ')
+      ? authHeader.substring(7)
+      : null;
+
+    if (!token) {
+      return next();
+    }
+
+    jwt.verify(token, JWT_SECRET, (err, decoded) => {
+      if (!err && decoded) {
+        req.user = decoded;
+      }
+
+      next();
+    });
+  } catch (error) {
+    next();
+  }
+};
+
+/**
  * Middleware to require specific role(s)
  * Must be used AFTER authenticateToken
  */

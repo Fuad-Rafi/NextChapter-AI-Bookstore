@@ -1,8 +1,7 @@
 import express from 'express';
-import mongoose from 'mongoose';
 import Book from '../models/bookmodels.js';
-import Order from '../models/ordermodel.js';
-import { authenticateToken, requireRole } from '../middleware/auth.js';
+import { authenticateToken, optionalAuthenticateToken, requireRole } from '../middleware/auth.js';
+import { normalizeBookPayload } from '../utils/ragData.js';
 
 const router = express.Router();
 
@@ -12,24 +11,46 @@ const parseOptionalPrice = (value) => {
     }
 
     const parsed = Number(value);
-    if (!Number.isFinite(parsed) || parsed < 0) {
+    if (!Number.isFinite(parsed) || parsed < 200 || parsed > 700) {
         return undefined;
     }
 
     return parsed;
 };
 
-// route to get all books
-router.get('/', async (req, res) => {
-    try {
-        const orderedBookIds = await Order.distinct('bookId');
-        const orderedObjectIds = orderedBookIds
-            .filter((bookId) => mongoose.Types.ObjectId.isValid(bookId))
-            .map((bookId) => new mongoose.Types.ObjectId(bookId));
+const parseOptionalRating = (value) => {
+    if (value === '' || value === null || value === undefined) {
+        return null;
+    }
 
-        const books = await Book.find({
-            _id: { $nin: orderedObjectIds }
-        });
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed) || parsed < 0 || parsed > 5) {
+        return undefined;
+    }
+
+    return parsed;
+};
+
+const buildBookPayload = (body) => {
+    const normalized = normalizeBookPayload(body);
+    const parsedPrice = parseOptionalPrice(body.price);
+    const parsedRating = parseOptionalRating(body.rating);
+
+    if (parsedPrice === undefined || parsedRating === undefined) {
+        return undefined;
+    }
+
+    return {
+        ...normalized,
+        price: parsedPrice,
+        rating: parsedRating,
+    };
+};
+
+// route to get all books
+router.get('/', optionalAuthenticateToken, async (req, res) => {
+    try {
+        const books = await Book.find({});
 
         res.json({
             count: books.length,
@@ -41,7 +62,7 @@ router.get('/', async (req, res) => {
     }
 });
 // route to get one book by ID
-router.get('/:id', async (req, res) => {
+router.get('/:id', optionalAuthenticateToken, async (req, res) => {
     try {
         const book = await Book.findById(req.params.id);
         if (!book) {
@@ -57,23 +78,19 @@ router.get('/:id', async (req, res) => {
 //route to update a new book (admin only)
 router.put('/:id', authenticateToken, requireRole('admin'), async (req, res) => {
     try {
-        const parsedPrice = parseOptionalPrice(req.body.price);
-        if (parsedPrice === undefined) {
+        const payload = buildBookPayload(req.body);
+        if (!payload) {
             return res.status(400).json({ message: 'Invalid price value' });
         }
 
-        const payload = {
-            title: req.body.title,
-            author: req.body.author,
-            publishedDate: req.body.publishedDate,
-            price: parsedPrice,
-        };
-
-        if (typeof req.body.coverImage === 'string') {
-            payload.coverImage = req.body.coverImage;
+        if (!payload.title || !payload.author || !payload.publishedDate) {
+            return res.status(400).json({ message: 'Missing required fields' });
         }
 
-        const updatedBook = await Book.findByIdAndUpdate(req.params.id, payload, { new: true });
+        const updatedBook = await Book.findByIdAndUpdate(req.params.id, payload, {
+            new: true,
+            runValidators: true,
+        });
 
         if (!updatedBook) {
             return res.status(404).json({ message: 'Book not found' });
@@ -105,23 +122,18 @@ router.delete('/:id', authenticateToken, requireRole('admin'), async (req, res) 
 //route to create a new book (admin only)
 router.post('/', authenticateToken, requireRole('admin'), async (request, response) => {
     try {
-        const publishedDate = request.body.publishedDate ?? request.body.publishYear;
-        const parsedPrice = parseOptionalPrice(request.body.price);
+        const payload = buildBookPayload(request.body);
 
-        if (!request.body.title || !request.body.author || !publishedDate) {
-            return response.status(400).json({ message: 'Missing required fields' });
-        }
-
-        if (parsedPrice === undefined) {
+        if (!payload) {
             return response.status(400).json({ message: 'Invalid price value' });
         }
 
+        if (!payload.title || !payload.author || !payload.publishedDate) {
+            return response.status(400).json({ message: 'Missing required fields' });
+        }
+
         const newBook = new Book({
-            title: request.body.title,
-            author: request.body.author,
-            publishedDate,
-            coverImage: typeof request.body.coverImage === 'string' ? request.body.coverImage : '',
-            price: parsedPrice,
+            ...payload,
         });
 
         const savedBook = await newBook.save();

@@ -2,6 +2,7 @@ import express from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import User from '../models/usermodel.js';
+import { normalizeAssistantMemory, normalizeUserPreferences } from '../utils/ragData.js';
 import {
   ADMIN_PASSWORD,
   ADMIN_USERNAME,
@@ -12,6 +13,15 @@ import {
 const router = express.Router();
 
 const createToken = (payload) => jwt.sign(payload, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN });
+
+const buildUserResponse = (user) => ({
+  id: user._id,
+  name: user.name,
+  email: user.email,
+  preferences: user.preferences,
+  assistantMemory: user.assistantMemory,
+  profileNotes: user.profileNotes,
+});
 
 router.post('/signup', async (req, res) => {
   try {
@@ -33,12 +43,17 @@ router.post('/signup', async (req, res) => {
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
+    const preferences = normalizeUserPreferences(req.body);
+    const assistantMemory = normalizeAssistantMemory(req.body.assistantMemory);
 
     const user = await User.create({
       name: name.trim(),
       email: normalizedEmail,
       password: hashedPassword,
       role: 'customer',
+      preferences,
+      assistantMemory,
+      profileNotes: typeof req.body.profileNotes === 'string' ? req.body.profileNotes.trim() : '',
     });
 
     const token = createToken({ id: user._id, role: user.role, email: user.email });
@@ -47,11 +62,7 @@ router.post('/signup', async (req, res) => {
       message: 'Signup successful',
       token,
       role: user.role,
-      user: {
-        id: user._id,
-        name: user.name,
-        email: user.email,
-      },
+      user: buildUserResponse(user),
     });
   } catch (error) {
     console.error('Signup error:', error.message);
@@ -126,11 +137,7 @@ router.post('/login', async (req, res) => {
       message: 'Login successful',
       token,
       role: user.role,
-      user: {
-        id: user._id,
-        name: user.name,
-        email: user.email,
-      },
+      user: buildUserResponse(user),
     });
   } catch (error) {
     console.error('Login error:', error.message);

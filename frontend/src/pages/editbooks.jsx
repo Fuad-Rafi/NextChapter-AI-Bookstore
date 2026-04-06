@@ -18,6 +18,7 @@ const EditBook = () => {
     defaultValues: {
       title: '',
       author: '',
+      synopsis: '',
       publishedDate: '',
       price: '',
       coverImage: '',
@@ -49,6 +50,7 @@ const EditBook = () => {
         reset({
           title: response.data.title ?? '',
           author: response.data.author ?? '',
+          synopsis: response.data.synopsis || response.data.description || '',
           publishedDate: new Date(response.data.publishedDate).toISOString().split('T')[0],
           price: response.data.price ?? '',
           coverImage: response.data.coverImage || '',
@@ -73,6 +75,8 @@ const EditBook = () => {
       const response = await axios.put(`/books/${id}`, {
         title: values.title,
         author: values.author,
+        synopsis: values.synopsis,
+        description: values.synopsis,
         publishedDate: new Date(values.publishedDate),
         price: values.price === '' ? null : Number(values.price),
         coverImage: values.coverImage,
@@ -110,15 +114,27 @@ const EditBook = () => {
           {errors.author && <p className="mt-1 text-sm text-red-600">{errors.author.message}</p>}
         </div>
         <div>
+          <label className="block text-gray-700 mb-2">Synopsis</label>
+          <textarea
+            className="w-full p-2 border border-gray-300 rounded"
+            rows={5}
+            {...register('synopsis', { required: 'Synopsis is required.' })}
+            placeholder="Short summary of what this book is about"
+          />
+          {errors.synopsis && <p className="mt-1 text-sm text-red-600">{errors.synopsis.message}</p>}
+        </div>
+        <div>
           <label className="block text-gray-700 mb-2">Price</label>
           <input
             type="number"
-            min="0"
+            min="200"
+            max="700"
             step="0.01"
             className="w-full p-2 border border-gray-300 rounded"
             {...register('price')}
-            placeholder="e.g. 49.99"
+            placeholder="e.g. 499"
           />
+          <p className="mt-1 text-xs text-gray-500">Price must stay between Tk 200 and Tk 700.</p>
         </div>
         <div>
           <label className="block text-gray-700 mb-2">Book Cover Image</label>

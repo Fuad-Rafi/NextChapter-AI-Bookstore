@@ -10,6 +10,14 @@ const Individual = () => {
   const [book, setBook] = useState(null);
   const [loading, setLoading] = useState(true);
 
+  const formatTk = (value) => {
+    if (typeof value !== 'number') {
+      return 'N/A';
+    }
+
+    return `Tk ${value.toFixed(2)}`;
+  };
+
   useEffect(() => {
     const fetchBook = async () => {
       try {
@@ -44,6 +52,16 @@ const Individual = () => {
           <div className="bg-white p-4 rounded-lg border border-gray-200 shadow-sm">
             <p className="text-sm font-medium text-gray-500">Author</p>
             <p className="mt-1 text-base font-semibold text-gray-900">{book.author}</p>
+          </div>
+          <div className="bg-white p-4 rounded-lg border border-gray-200 shadow-sm md:col-span-2 lg:col-span-3">
+            <p className="text-sm font-medium text-gray-500">Synopsis</p>
+            <p className="mt-1 text-base leading-7 text-gray-900 whitespace-pre-line">
+              {book.synopsis || book.description || 'No synopsis available yet.'}
+            </p>
+          </div>
+          <div className="bg-white p-4 rounded-lg border border-gray-200 shadow-sm">
+            <p className="text-sm font-medium text-gray-500">Price</p>
+            <p className="mt-1 text-base font-semibold text-gray-900">{formatTk(book.price)}</p>
           </div>
           <div className="bg-white p-4 rounded-lg border border-gray-200 shadow-sm">
             <p className="text-sm font-medium text-gray-500">Publish Year</p>
