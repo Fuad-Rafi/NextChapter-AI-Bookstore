@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { useAuthStore } from '../store/useAuthStore';
 
 // Base API URL
 export const API_BASE = import.meta.env.VITE_API_URL || '/api';
@@ -11,17 +12,10 @@ const axiosInstance = axios.create({
 // Request interceptor to add Authorization header
 axiosInstance.interceptors.request.use(
   (config) => {
-    // Get token from localStorage
-    const authData = localStorage.getItem('book_app_auth');
-    if (authData) {
-      try {
-        const { token } = JSON.parse(authData);
-        if (token) {
-          config.headers['Authorization'] = `Bearer ${token}`;
-        }
-      } catch (error) {
-        console.error('Error parsing auth data:', error);
-      }
+    const token = useAuthStore.getState().token;
+    if (token) {
+      config.headers = config.headers ?? {};
+      config.headers.Authorization = `Bearer ${token}`;
     }
     return config;
   },
@@ -35,8 +29,7 @@ axiosInstance.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
-      // Token expired or invalid - clear auth data and redirect to login
-      localStorage.removeItem('book_app_auth');
+      useAuthStore.getState().logout();
       if (window.location.pathname !== '/login') {
         window.location.href = '/login';
       }

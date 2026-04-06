@@ -2,17 +2,28 @@ import React from 'react'
 import { useEffect, useState } from 'react';
 import BackButton from '../components/backbutton';
 import axios from '../utils/axios';
-import Spinner from '../components/spinner';
 import { useNavigate , useParams} from 'react-router-dom';
+import { useForm } from 'react-hook-form';
 
 
 const EditBook = () => {
   const navigate = useNavigate();
-  const [title, setTitle] = useState('');
-  const [author, setAuthor] = useState('');
-  const [publishedDate, setPublishedDate] = useState('');
-  const [price, setPrice] = useState('');
-  const [coverImage, setCoverImage] = useState('');
+  const {
+    register,
+    handleSubmit,
+    setValue,
+    reset,
+    formState: { errors },
+  } = useForm({
+    defaultValues: {
+      title: '',
+      author: '',
+      publishedDate: '',
+      price: '',
+      coverImage: '',
+    },
+  });
+  const [coverImagePreview, setCoverImagePreview] = useState('');
   const [loading, setLoading] = useState(false);
   const { id } = useParams();
 
@@ -24,7 +35,9 @@ const EditBook = () => {
 
     const reader = new FileReader();
     reader.onloadend = () => {
-      setCoverImage(typeof reader.result === 'string' ? reader.result : '');
+      const imageData = typeof reader.result === 'string' ? reader.result : '';
+      setCoverImagePreview(imageData);
+      setValue('coverImage', imageData);
     };
     reader.readAsDataURL(file);
   };
@@ -33,21 +46,24 @@ const EditBook = () => {
     const fetchBook = async () => {
       try {
         const response = await axios.get(`/books/${id}`);
-        setTitle(response.data.title);
-        setAuthor(response.data.author);
-        setPublishedDate(new Date(response.data.publishedDate).toISOString().split('T')[0]);
-        setPrice(response.data.price ?? '');
-        setCoverImage(response.data.coverImage || '');
+        reset({
+          title: response.data.title ?? '',
+          author: response.data.author ?? '',
+          publishedDate: new Date(response.data.publishedDate).toISOString().split('T')[0],
+          price: response.data.price ?? '',
+          coverImage: response.data.coverImage || '',
+        });
+        setCoverImagePreview(response.data.coverImage || '');
       } catch (error) {
         console.error('Error fetching book:', error);
       }
     };
 
     fetchBook();
-  }, [id]);
+  }, [id, reset]);
 
-  const handleSaveBook = async () => {
-    if (!title || !author || !publishedDate) {
+  const handleSaveBook = async (values) => {
+    if (!values.title || !values.author || !values.publishedDate) {
       alert('Please fill in all fields');
       return;
     }
@@ -55,11 +71,11 @@ const EditBook = () => {
     try {
       setLoading(true);
       const response = await axios.put(`/books/${id}`, {
-        title,
-        author,
-        publishedDate: new Date(publishedDate),
-        price: price === '' ? null : Number(price),
-        coverImage,
+        title: values.title,
+        author: values.author,
+        publishedDate: new Date(values.publishedDate),
+        price: values.price === '' ? null : Number(values.price),
+        coverImage: values.coverImage,
       });
       console.log(response.data);
       setLoading(false);
@@ -74,24 +90,24 @@ const EditBook = () => {
     <div className="p-4">
       <BackButton to="/" />
       <h1 className="text-3xl font-bold mb-4">Edit Book</h1>
-      <div className="space-y-4">
+      <form onSubmit={handleSubmit(handleSaveBook)} className="space-y-4">
         <div>
           <label className="block text-gray-700 mb-2">Title</label>
           <input
             type="text"
             className="w-full p-2 border border-gray-300 rounded"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
+            {...register('title', { required: 'Title is required.' })}
           />
+          {errors.title && <p className="mt-1 text-sm text-red-600">{errors.title.message}</p>}
         </div>
         <div>
           <label className="block text-gray-700 mb-2">Author</label>
           <input
             type="text"
             className="w-full p-2 border border-gray-300 rounded"
-            value={author}
-            onChange={(e) => setAuthor(e.target.value)}
+            {...register('author', { required: 'Author is required.' })}
           />
+          {errors.author && <p className="mt-1 text-sm text-red-600">{errors.author.message}</p>}
         </div>
         <div>
           <label className="block text-gray-700 mb-2">Price</label>
@@ -100,8 +116,7 @@ const EditBook = () => {
             min="0"
             step="0.01"
             className="w-full p-2 border border-gray-300 rounded"
-            value={price}
-            onChange={(e) => setPrice(e.target.value)}
+            {...register('price')}
             placeholder="e.g. 49.99"
           />
         </div>
@@ -113,9 +128,9 @@ const EditBook = () => {
             className="w-full p-2 border border-gray-300 rounded bg-white"
             onChange={handleCoverImageChange}
           />
-          {coverImage && (
+          {coverImagePreview && (
             <img
-              src={coverImage}
+              src={coverImagePreview}
               alt="Cover preview"
               className="mt-3 h-48 w-32 rounded-md border border-gray-300 object-cover"
             />
@@ -126,18 +141,18 @@ const EditBook = () => {
           <input
             type="date"
             className="w-full p-2 border border-gray-300 rounded"
-            value={publishedDate}
-            onChange={(e) => setPublishedDate(e.target.value)}
+            {...register('publishedDate', { required: 'Published date is required.' })}
           />
+          {errors.publishedDate && <p className="mt-1 text-sm text-red-600">{errors.publishedDate.message}</p>}
         </div>
         <button
-          onClick={handleSaveBook}
+          type="submit"
           disabled={loading}
           className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded disabled:opacity-50"
         >
           {loading ? 'Updating...' : 'Update Book'}
         </button>
-      </div>
+      </form>
     </div>
   )
 }

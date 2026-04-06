@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
+import { useForm } from 'react-hook-form';
 import { useAuth } from '../hooks/useAuth';
 import api from '../utils/axios';
 
@@ -7,11 +8,20 @@ const Login = () => {
   const { isAuthenticated, role, setSession } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+  const {
+    register,
+    handleSubmit,
+    formState: { errors },
+    reset,
+  } = useForm({
+    defaultValues: {
+      email: '',
+      username: '',
+      password: '',
+    },
+  });
 
   const [mode, setMode] = useState('customer');
-  const [email, setEmail] = useState('');
-  const [username, setUsername] = useState('');
-  const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -19,16 +29,15 @@ const Login = () => {
     return <Navigate to={role === 'admin' ? '/admin/home' : '/customer/home'} replace />;
   }
 
-  const handleSubmit = async (event) => {
-    event.preventDefault();
+  const onSubmit = async (values) => {
     setError('');
 
-    if (mode === 'customer' && (!email.trim() || !password.trim())) {
+    if (mode === 'customer' && (!values.email?.trim() || !values.password?.trim())) {
       setError('Email and password are required.');
       return;
     }
 
-    if (mode === 'admin' && (!username.trim() || !password.trim())) {
+    if (mode === 'admin' && (!values.username?.trim() || !values.password?.trim())) {
       setError('Username and password are required for admin login.');
       return;
     }
@@ -37,11 +46,12 @@ const Login = () => {
       setLoading(true);
       const body =
         mode === 'admin'
-          ? { role: 'admin', username: username.trim(), password }
-          : { email: email.trim(), password };
+          ? { role: 'admin', username: values.username.trim(), password: values.password }
+          : { email: values.email.trim(), password: values.password };
 
       const response = await api.post('/auth/login', body);
       setSession(response.data);
+      reset();
 
       const redirectedPath = location.state?.from?.pathname;
       if (response.data.role === 'admin') {
@@ -84,28 +94,32 @@ const Login = () => {
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
           {mode === 'customer' ? (
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">Email</label>
               <input
                 type="email"
-                value={email}
-                onChange={(event) => setEmail(event.target.value)}
+                {...register('email', {
+                  required: mode === 'customer' ? 'Email is required.' : false,
+                })}
                 className="w-full border border-slate-300 text-slate-900 bg-white rounded p-2"
                 placeholder="you@example.com"
               />
+              {errors.email && <p className="mt-1 text-sm text-red-600">{errors.email.message}</p>}
             </div>
           ) : (
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">Admin Username</label>
               <input
                 type="text"
-                value={username}
-                onChange={(event) => setUsername(event.target.value)}
+                {...register('username', {
+                  required: mode === 'admin' ? 'Username is required.' : false,
+                })}
                 className="w-full border border-slate-300 text-slate-900 bg-white rounded p-2"
                 placeholder="admin"
               />
+              {errors.username && <p className="mt-1 text-sm text-red-600">{errors.username.message}</p>}
             </div>
           )}
 
@@ -113,11 +127,11 @@ const Login = () => {
             <label className="block text-sm font-medium text-slate-700 mb-1">Password</label>
             <input
               type="password"
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
+              {...register('password', { required: 'Password is required.' })}
               className="w-full border border-slate-300 text-slate-900 bg-white rounded p-2"
               placeholder="********"
             />
+            {errors.password && <p className="mt-1 text-sm text-red-600">{errors.password.message}</p>}
           </div>
 
           {error && <p className="text-red-600 text-sm">{error}</p>}

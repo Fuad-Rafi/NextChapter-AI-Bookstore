@@ -1,10 +1,18 @@
-import { useContext } from 'react';
-import { AuthContext } from '../context/AuthContext';
+import { useAuthStore } from '../store/useAuthStore';
 
 export const useAuth = () => {
-  const ctx = useContext(AuthContext);
-  if (!ctx) {
-    throw new Error('useAuth must be used inside AuthProvider');
-  }
-  return ctx;
+  const token = useAuthStore((state) => state.token);
+  const role = useAuthStore((state) => state.role);
+  const user = useAuthStore((state) => state.user);
+  const setSession = useAuthStore((state) => state.setSession);
+  const logout = useAuthStore((state) => state.logout);
+
+  return {
+    token,
+    role,
+    user,
+    setSession,
+    logout,
+    isAuthenticated: Boolean(token),
+  };
 };

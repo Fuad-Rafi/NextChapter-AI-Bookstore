@@ -2,25 +2,36 @@ import { useEffect, useState } from 'react';
 import axios from '../utils/axios';
 import { Link, useParams } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
+import { useForm } from 'react-hook-form';
 
 const OrderBook = () => {
   const { id } = useParams();
   const { user } = useAuth();
+  const {
+    register,
+    handleSubmit,
+    setValue,
+    formState: { errors },
+  } = useForm({
+    defaultValues: {
+      name: '',
+      address: '',
+      phone: '',
+    },
+  });
 
   const [book, setBook] = useState(null);
   const [loadingBook, setLoadingBook] = useState(true);
-  const [name, setName] = useState('');
-  const [address, setAddress] = useState('');
-  const [phone, setPhone] = useState('');
   const [error, setError] = useState('');
   const [confirmed, setConfirmed] = useState(false);
+  const [submittedOrder, setSubmittedOrder] = useState(null);
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     if (user?.name) {
-      setName(user.name);
+      setValue('name', user.name);
     }
-  }, [user]);
+  }, [setValue, user]);
 
   useEffect(() => {
     const fetchBook = async () => {
@@ -38,11 +49,10 @@ const OrderBook = () => {
     fetchBook();
   }, [id]);
 
-  const handleConfirm = async (event) => {
-    event.preventDefault();
+  const handleConfirm = async (values) => {
     setError('');
 
-    if (!name.trim() || !address.trim() || !phone.trim()) {
+    if (!values.name.trim() || !values.address.trim() || !values.phone.trim()) {
       setError('Name, address and phone number are required.');
       return;
     }
@@ -59,11 +69,16 @@ const OrderBook = () => {
         bookId: book._id,
         bookTitle: book.title,
         bookAuthor: book.author,
-        customerName: name.trim(),
-        customerAddress: address.trim(),
-        customerPhone: phone.trim(),
+        customerName: values.name.trim(),
+        customerAddress: values.address.trim(),
+        customerPhone: values.phone.trim(),
       });
 
+      setSubmittedOrder({
+        name: values.name.trim(),
+        address: values.address.trim(),
+        phone: values.phone.trim(),
+      });
       setConfirmed(true);
     } catch (submitError) {
       setError(submitError.response?.data?.message || 'Failed to save order. Please try again.');
@@ -91,38 +106,38 @@ const OrderBook = () => {
           </p>
         )}
 
-        <form onSubmit={handleConfirm} className="space-y-4">
+        <form onSubmit={handleSubmit(handleConfirm)} className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">Name</label>
             <input
               type="text"
-              value={name}
-              onChange={(event) => setName(event.target.value)}
+              {...register('name', { required: 'Name is required.' })}
               className="w-full border border-slate-300 text-slate-900 bg-white rounded p-2"
               placeholder="Your full name"
             />
+            {errors.name && <p className="mt-1 text-sm text-red-600">{errors.name.message}</p>}
           </div>
 
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">Address</label>
             <textarea
-              value={address}
-              onChange={(event) => setAddress(event.target.value)}
+              {...register('address', { required: 'Address is required.' })}
               className="w-full border border-slate-300 text-slate-900 bg-white rounded p-2"
               placeholder="Your delivery address"
               rows={3}
             />
+            {errors.address && <p className="mt-1 text-sm text-red-600">{errors.address.message}</p>}
           </div>
 
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">Phone Number</label>
             <input
               type="tel"
-              value={phone}
-              onChange={(event) => setPhone(event.target.value)}
+              {...register('phone', { required: 'Phone number is required.' })}
               className="w-full border border-slate-300 text-slate-900 bg-white rounded p-2"
               placeholder="Your phone number"
             />
+            {errors.phone && <p className="mt-1 text-sm text-red-600">{errors.phone.message}</p>}
           </div>
 
           {error && <p className="text-red-600 text-sm">{error}</p>}
@@ -139,9 +154,9 @@ const OrderBook = () => {
         {confirmed && (
           <div className="mt-6 border border-green-300 bg-green-50 rounded p-4">
             <h2 className="font-semibold text-green-800">Order Confirmed</h2>
-            <p className="text-green-700 text-sm mt-2">Name: {name}</p>
-            <p className="text-green-700 text-sm">Address: {address}</p>
-            <p className="text-green-700 text-sm">Phone: {phone}</p>
+            <p className="text-green-700 text-sm mt-2">Name: {submittedOrder?.name || user?.name || 'Customer'}</p>
+            <p className="text-green-700 text-sm">Address: {submittedOrder?.address || 'confirmed'}</p>
+            <p className="text-green-700 text-sm">Phone: {submittedOrder?.phone || 'confirmed'}</p>
             <p className="text-green-700 text-sm">Book: {book?.title || 'Unknown Book'}</p>
           </div>
         )}

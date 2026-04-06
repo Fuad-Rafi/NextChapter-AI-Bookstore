@@ -1,15 +1,25 @@
 import { useState } from 'react';
 import { Link, Navigate, useNavigate } from 'react-router-dom';
+import { useForm } from 'react-hook-form';
 import { useAuth } from '../hooks/useAuth';
 import api from '../utils/axios';
 
 const Signup = () => {
   const { isAuthenticated, role, setSession } = useAuth();
   const navigate = useNavigate();
+  const {
+    register,
+    handleSubmit,
+    formState: { errors },
+    reset,
+  } = useForm({
+    defaultValues: {
+      name: '',
+      email: '',
+      password: '',
+    },
+  });
 
-  const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -17,16 +27,15 @@ const Signup = () => {
     return <Navigate to={role === 'admin' ? '/admin/home' : '/customer/home'} replace />;
   }
 
-  const handleSubmit = async (event) => {
-    event.preventDefault();
+  const onSubmit = async (values) => {
     setError('');
 
-    if (!name.trim() || !email.trim() || !password.trim()) {
+    if (!values.name.trim() || !values.email.trim() || !values.password.trim()) {
       setError('Name, email and password are required.');
       return;
     }
 
-    if (password.trim().length < 6) {
+    if (values.password.trim().length < 6) {
       setError('Password must be at least 6 characters.');
       return;
     }
@@ -34,12 +43,13 @@ const Signup = () => {
     try {
       setLoading(true);
       const response = await api.post('/auth/signup', {
-        name: name.trim(),
-        email: email.trim(),
-        password,
+        name: values.name.trim(),
+        email: values.email.trim(),
+        password: values.password,
       });
 
       setSession(response.data);
+      reset();
       navigate('/customer/home', { replace: true });
     } catch (apiError) {
       setError(apiError.response?.data?.message || 'Signup failed. Please try again.');
@@ -53,38 +63,41 @@ const Signup = () => {
       <div className="w-full max-w-md bg-white text-slate-900 rounded-xl shadow-lg p-6">
         <h1 className="text-2xl font-bold text-slate-900 mb-4">Customer Sign Up</h1>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">Name</label>
             <input
               type="text"
-              value={name}
-              onChange={(event) => setName(event.target.value)}
+              {...register('name', { required: 'Name is required.' })}
               className="w-full border border-slate-300 text-slate-900 bg-white rounded p-2"
               placeholder="Your name"
             />
+            {errors.name && <p className="mt-1 text-sm text-red-600">{errors.name.message}</p>}
           </div>
 
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">Email</label>
             <input
               type="email"
-              value={email}
-              onChange={(event) => setEmail(event.target.value)}
+              {...register('email', { required: 'Email is required.' })}
               className="w-full border border-slate-300 text-slate-900 bg-white rounded p-2"
               placeholder="you@example.com"
             />
+            {errors.email && <p className="mt-1 text-sm text-red-600">{errors.email.message}</p>}
           </div>
 
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">Password</label>
             <input
               type="password"
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
+              {...register('password', {
+                required: 'Password is required.',
+                minLength: { value: 6, message: 'Password must be at least 6 characters.' },
+              })}
               className="w-full border border-slate-300 text-slate-900 bg-white rounded p-2"
               placeholder="At least 6 characters"
             />
+            {errors.password && <p className="mt-1 text-sm text-red-600">{errors.password.message}</p>}
           </div>
 
           {error && <p className="text-red-600 text-sm">{error}</p>}
