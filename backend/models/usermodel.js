@@ -9,6 +9,7 @@ const readingPreferencesSchema = new mongoose.Schema(
   {
     preferredGenres: stringArray,
     dislikedGenres: stringArray,
+    preferredAuthors: stringArray,
     favoriteAuthors: stringArray,
     favoriteThemes: stringArray,
     tonePreferences: stringArray,
@@ -56,6 +57,36 @@ const assistantMemorySchema = new mongoose.Schema(
   { _id: false }
 );
 
+const feedbackProfileSchema = new mongoose.Schema(
+  {
+    likedBookIds: {
+      type: [mongoose.Schema.Types.ObjectId],
+      ref: 'Book',
+      default: [],
+    },
+    dislikedBookIds: {
+      type: [mongoose.Schema.Types.ObjectId],
+      ref: 'Book',
+      default: [],
+    },
+    clickedBookIds: {
+      type: [mongoose.Schema.Types.ObjectId],
+      ref: 'Book',
+      default: [],
+    },
+    viewedBookIds: {
+      type: [mongoose.Schema.Types.ObjectId],
+      ref: 'Book',
+      default: [],
+    },
+    updatedAt: {
+      type: Date,
+      default: null,
+    },
+  },
+  { _id: false }
+);
+
 const userSchema = new mongoose.Schema(
   {
     name: {
@@ -85,6 +116,10 @@ const userSchema = new mongoose.Schema(
     },
     assistantMemory: {
       type: assistantMemorySchema,
+      default: () => ({}),
+    },
+    feedbackProfile: {
+      type: feedbackProfileSchema,
       default: () => ({}),
     },
     profileNotes: {

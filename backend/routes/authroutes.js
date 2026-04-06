@@ -3,14 +3,23 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import User from '../models/usermodel.js';
 import { normalizeAssistantMemory, normalizeUserPreferences } from '../utils/ragData.js';
+import { createRateLimiter } from '../middleware/rateLimit.js';
+import { safeLogError } from '../utils/securityLogger.js';
 import {
   ADMIN_PASSWORD,
   ADMIN_USERNAME,
   JWT_EXPIRES_IN,
   JWT_SECRET,
+  RATE_LIMIT_AUTH_LOGIN_PER_MINUTE,
 } from '../config.js';
 
 const router = express.Router();
+
+const loginRateLimiter = createRateLimiter({
+  windowMs: 60 * 1000,
+  max: RATE_LIMIT_AUTH_LOGIN_PER_MINUTE,
+  message: 'Too many login attempts. Please try again shortly.',
+});
 
 const createToken = (payload) => jwt.sign(payload, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN });
 
@@ -65,12 +74,12 @@ router.post('/signup', async (req, res) => {
       user: buildUserResponse(user),
     });
   } catch (error) {
-    console.error('Signup error:', error.message);
+    safeLogError('Signup error', error);
     return res.status(500).json({ message: 'Internal server error' });
   }
 });
 
-router.post('/login', async (req, res) => {
+router.post('/login', loginRateLimiter, async (req, res) => {
   try {
     const { role, email, password, username } = req.body;
 
@@ -140,7 +149,7 @@ router.post('/login', async (req, res) => {
       user: buildUserResponse(user),
     });
   } catch (error) {
-    console.error('Login error:', error.message);
+    safeLogError('Login error', error);
     return res.status(500).json({ message: 'Internal server error' });
   }
 });

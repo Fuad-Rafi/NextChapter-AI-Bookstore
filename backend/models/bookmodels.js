@@ -73,6 +73,21 @@ const bookSchema = new mongoose.Schema({
     min: 0,
     max: 5,
   },
+  embedding: {
+    type: [Number],
+    required: false,
+    sparse: true,
+  },
+  semanticMetadata: {
+    embeddedAt: {
+      type: Date,
+      required: false,
+    },
+    modelVersion: {
+      type: String,
+      required: false,
+    },
+  },
 }, { timestamps: true });
 
 bookSchema.pre('validate', function updateSearchText() {

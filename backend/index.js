@@ -3,10 +3,15 @@ import mongoose from 'mongoose';
 import bookRoutes from './routes/bookrouts.js';
 import authRoutes from './routes/authroutes.js';
 import orderRoutes from './routes/orderroutes.js';
-import { mongoDBURL, PORT } from './config.js';
+import recommendationRoutes from './routes/bookrecommendations.js';
+import assistantChatRoutes from './routes/assistantchat.js';
+import { mongoDBURL, PORT, validateEnvironment } from './config.js';
+import { safeLogError } from './utils/securityLogger.js';
 import cors from 'cors';
 
 const app = express();
+
+validateEnvironment();
 
 const localOrigins = ['http://localhost:5173', 'http://localhost:5000'];
 const envOrigins = process.env.CORS_ORIGIN
@@ -47,11 +52,14 @@ app.use(async (req, res, next) => {
     await connectDB();
     next();
   } catch (error) {
+    safeLogError('Database connection failure', error);
     res.status(500).json({ message: 'Database connection failed', error: error.message });
   }
 });
 
+app.use('/books/recommendations', recommendationRoutes);
 app.use('/books', bookRoutes);
+app.use('/assistant', assistantChatRoutes);
 app.use('/auth', authRoutes);
 app.use('/orders', orderRoutes);
 
@@ -63,7 +71,7 @@ if (process.env.VERCEL !== '1') {
       });
     })
     .catch((error) => {
-      console.error('Error connecting to MongoDB:', error.message);
+      safeLogError('Error connecting to MongoDB', error);
     });
 }
 
