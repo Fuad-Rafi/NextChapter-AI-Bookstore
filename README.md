@@ -1,4 +1,4 @@
-﻿# MERN Book Platform with RAG Assistant
+# MERN Book Platform with RAG Assistant
 
 Last updated: 2026-04-07
 
