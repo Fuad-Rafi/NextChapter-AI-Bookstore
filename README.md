@@ -1,4 +1,8 @@
+<<<<<<< HEAD
 # MERN Book Platform with Classic RAG Assistant
+=======
+# MERN Book Platform with RAG Assistant
+>>>>>>> 2747d247ecb4c131f5511c91d4d34df2eab9b0aa
 
 Last updated: 2026-04-16
 
