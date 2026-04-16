@@ -5,21 +5,14 @@ import User from '../models/usermodel.js';
 import Book from '../models/bookmodels.js';
 import { authenticateToken, requireRole } from '../middleware/auth.js';
 import { createRateLimiter } from '../middleware/rateLimit.js';
-import { getRankedRecommendations } from '../services/recommendationService.js';
 import { generateAssistantReply } from '../services/llmService.js';
+import { classifyQueryIntent, retrieveRelevantBooks } from '../services/ragRetriever.js';
 import {
   RATE_LIMIT_ASSISTANT_CHAT_PER_MINUTE,
   RATE_LIMIT_ASSISTANT_FEEDBACK_PER_MINUTE,
 } from '../config.js';
 import { safeLogError } from '../utils/securityLogger.js';
-import {
-  buildAssistantReply,
-  buildRecommendationQuery,
-  extractPreferenceSignals,
-  mergeMemoryProfile,
-  summarizeConversation,
-} from '../services/memoryService.js';
-import * as embeddingService from '../services/embeddingService.js';
+import { summarizeConversation } from '../services/memoryService.js';
 
 const router = express.Router();
 
@@ -60,37 +53,21 @@ const removeObjectId = (values = [], id) => {
   return (values || []).filter((item) => String(item) !== String(id));
 };
 
-const updateUserFromMemory = async ({ userId, memoryProfile, conversationSummary }) => {
-  const user = await User.findById(userId);
-  if (!user) {
-    return;
-  }
+const buildGroundedRecommendations = (books = []) => {
+  return books.map((book) => ({
+    _id: book._id,
+    title: book.title,
+    author: book.author,
+    genre: book.genre,
+    synopsis: book.synopsis || book.description,
+    price: book.price,
+    rating: book.rating,
+    relevanceScore: Number(book.relevanceScore ?? 0),
+  }));
+};
 
-  const preferences = user.preferences || {};
-  preferences.preferredGenres = mergeStringArrays(preferences.preferredGenres, memoryProfile.preferredGenres);
-  preferences.dislikedGenres = mergeStringArrays(preferences.dislikedGenres, memoryProfile.dislikedGenres);
-  preferences.favoriteAuthors = mergeStringArrays(
-    preferences.favoriteAuthors,
-    memoryProfile.preferredAuthors
-  );
-
-  preferences.budgetRange = preferences.budgetRange || { min: null, max: null };
-  if (typeof memoryProfile.budgetMin === 'number') {
-    preferences.budgetRange.min = memoryProfile.budgetMin;
-  }
-  if (typeof memoryProfile.budgetMax === 'number') {
-    preferences.budgetRange.max = memoryProfile.budgetMax;
-  }
-
-  user.preferences = preferences;
-  user.assistantMemory = {
-    ...(user.assistantMemory || {}),
-    chatSummary: conversationSummary,
-    lastConversationAt: new Date(),
-    lastUpdatedAt: new Date(),
-  };
-
-  await user.save();
+const summarizeRecentConversation = (messages = []) => {
+  return summarizeConversation(messages);
 };
 
 router.post('/chat', authenticateToken, requireRole('customer'), assistantChatRateLimiter, async (req, res) => {
@@ -109,9 +86,6 @@ router.post('/chat', authenticateToken, requireRole('customer'), assistantChatRa
       ? Math.min(Math.max(Math.trunc(requestedLimit), 1), 8)
       : 5;
 
-    // Load user first (needed for preference loading) - renamed to avoid conflict with destructured user
-    const currentUserDb = await User.findById(req.user.id).lean();
-
     let conversation;
     if (req.body.conversationId && mongoose.Types.ObjectId.isValid(String(req.body.conversationId))) {
       conversation = await ChatMemory.findOne({
@@ -127,104 +101,63 @@ router.post('/chat', authenticateToken, requireRole('customer'), assistantChatRa
       });
     }
 
-    const extractedSignals = extractPreferenceSignals(rawMessage);
-
-    // Load user's saved preferences from database and merge with conversation history
-    let userSavedPreferences = {};
-    if (currentUserDb?.preferences) {
-      userSavedPreferences = {
-        preferredGenres: currentUserDb.preferences.preferredGenres || [],
-        dislikedGenres: currentUserDb.preferences.dislikedGenres || [],
-        preferredAuthors:
-          currentUserDb.preferences.preferredAuthors
-          || currentUserDb.preferences.favoriteAuthors
-          || [],
-        budgetMin: currentUserDb.preferences.budgetRange?.min,
-        budgetMax: currentUserDb.preferences.budgetRange?.max,
-        pacePreference: currentUserDb.preferences.pacePreference,
-        lengthPreference: currentUserDb.preferences.lengthPreference,
-      };
-    }
-
-    // Merge: saved preferences → conversation history → incoming signals (priority order)
-    // Mark extractedSignals as current message so genres/authors REPLACE old ones (not accumulate)
-    const mergedMemoryProfile = mergeMemoryProfile(
-      mergeMemoryProfile(userSavedPreferences, conversation.memoryProfile || {}, false),
-      extractedSignals,
-      true // isCurrentMessage - genres/authors replace old ones, not accumulate
-    );
-    const lastAssistantMessage = [...conversation.messages].reverse().find((entry) => entry.role === 'assistant');
-    const recommendationQuery = buildRecommendationQuery({
-      userMessage: rawMessage,
-      memoryProfile: mergedMemoryProfile,
-      lastAssistantMessage,
-    });
-
-    // Generate embedding for semantic similarity
-    let queryEmbedding;
-    try {
-      queryEmbedding = await embeddingService.embedText(recommendationQuery);
-    } catch (embedError) {
-      safeLogError('Failed to generate query embedding', embedError);
-      queryEmbedding = undefined; // Fall back to token-based matching
-    }
-
-    const { user, recommendations } = await getRankedRecommendations({
-      userId: req.user.id,
-      query: recommendationQuery,
-      queryEmbedding,
-      limit,
-      mergedMemoryProfile,
-    });
-
-    // Hard filter: Remove books above budget constraint
-    const filteredRecommendations = recommendations.filter((book) => {
-      if (typeof mergedMemoryProfile.budgetMax === 'number') {
-        return book.price <= mergedMemoryProfile.budgetMax;
-      }
-      return true;
-    });
-
     const userMessageEntry = {
       role: 'user',
       content: rawMessage,
       retrievedBookIds: [],
-      extractedPreferences: {
-        preferredGenres: extractedSignals.preferredGenres,
-        dislikedGenres: extractedSignals.dislikedGenres,
-        preferredAuthors: extractedSignals.preferredAuthors,
-        budgetMin: extractedSignals.budgetMin,
-        budgetMax: extractedSignals.budgetMax,
-        pacePreference: extractedSignals.pacePreference,
-        lengthPreference: extractedSignals.lengthPreference,
-      },
       createdAt: new Date(),
     };
 
-    let llmResult;
-    try {
-      llmResult = await generateAssistantReply({
-        userMessage: rawMessage,
-        conversationMessages: conversation.messages,
-        memoryProfile: mergedMemoryProfile,
-        candidates: filteredRecommendations,
+    const intent = classifyQueryIntent(rawMessage);
+    let assistantReply = '';
+    let responseRecommendations = [];
+    let recommendedBookIds = [];
+    let retrievedContext = {
+      query: rawMessage,
+      constraints: {},
+      relevanceThreshold: Number(process.env.RAG_RELEVANCE_THRESHOLD ?? 0.35),
+      retrievedCount: 0,
+    };
+
+    if (intent.isGreeting || intent.isEmpty || intent.isClarification) {
+      assistantReply = 'Hello! Tell me a genre, author, or budget, and I will retrieve matching books.';
+    } else {
+      const retrieval = await retrieveRelevantBooks({
+        userId: req.user.id,
+        userQuery: rawMessage,
+        limit,
       });
-    } catch {
-      llmResult = null;
+
+      retrievedContext = {
+        query: retrieval.query,
+        constraints: retrieval.constraints,
+        relevanceThreshold: retrieval.relevanceThreshold,
+        retrievedCount: retrieval.retrievedBooks.length,
+      };
+
+      if (!retrieval.retrievedBooks.length) {
+        assistantReply = 'I could not find strong matches for that request. Try adding a genre, author, or budget range.';
+      } else {
+        const llmResult = await generateAssistantReply({
+          userMessage: rawMessage,
+          retrievedBooks: retrieval.retrievedBooks,
+        });
+
+        assistantReply = llmResult.assistantReply;
+
+        const recommendedTitleSet = new Set(llmResult.recommendedTitles || []);
+        const selectedBooks = recommendedTitleSet.size > 0
+          ? retrieval.retrievedBooks.filter((book) => recommendedTitleSet.has(book.title)).slice(0, limit)
+          : retrieval.retrievedBooks.slice(0, Math.min(limit, 3));
+
+        const groundedBooks = selectedBooks.length > 0
+          ? selectedBooks
+          : retrieval.retrievedBooks.slice(0, Math.min(limit, 3));
+
+        responseRecommendations = buildGroundedRecommendations(groundedBooks);
+        recommendedBookIds = groundedBooks.map((book) => book._id);
+      }
     }
-
-    const assistantReply = llmResult?.assistantReply || buildAssistantReply({
-      userMessage: rawMessage,
-      recommendations: filteredRecommendations,
-      memoryProfile: mergedMemoryProfile,
-      usedMemory: Boolean(lastAssistantMessage || (conversation.messages || []).length > 0),
-    });
-
-    // FIXED: Use top-ranked books directly instead of filtering by title match
-    // This avoids the fragile exact-match problem that causes empty recommendations
-    const recommendedBookIds = filteredRecommendations
-      .slice(0, limit)
-      .map((book) => book._id);
 
     const assistantMessageEntry = {
       role: 'assistant',
@@ -235,50 +168,16 @@ router.post('/chat', authenticateToken, requireRole('customer'), assistantChatRa
 
     conversation.messages.push(userMessageEntry);
     conversation.messages.push(assistantMessageEntry);
-    conversation.memoryProfile = {
-      ...mergedMemoryProfile,
-      lastReferencedTitle: filteredRecommendations[0]?.title || mergedMemoryProfile.lastReferencedTitle || '',
-    };
-    conversation.summary = summarizeConversation(conversation.messages, conversation.memoryProfile);
+    conversation.summary = summarizeRecentConversation(conversation.messages);
     conversation.lastMessageAt = new Date();
     await conversation.save();
-
-    await updateUserFromMemory({
-      userId: req.user.id,
-      memoryProfile: conversation.memoryProfile,
-      conversationSummary: conversation.summary,
-    });
-
-    // Return top-ranked books directly (already perfectly scored by ranking system)
-    const responseRecommendations = filteredRecommendations
-      .slice(0, limit)
-      .map((book) => ({
-        _id: book._id,
-        title: book.title,
-        author: book.author,
-        genre: book.genre,
-        synopsis: book.synopsis || book.description,
-        price: book.price,
-        rating: book.rating,
-        score: book.score,
-      }));
 
     return res.status(200).json({
       conversationId: conversation._id,
       assistantMessage: assistantMessageEntry.content,
       recommendations: responseRecommendations,
+      retrievedContext,
       memorySummary: conversation.summary,
-      profileSnapshot: {
-        preferredGenres: mergedMemoryProfile.preferredGenres || [],
-        dislikedGenres: mergedMemoryProfile.dislikedGenres || [],
-        preferredAuthors: mergedMemoryProfile.preferredAuthors || [],
-        budgetRange: {
-          min: mergedMemoryProfile.budgetMin,
-          max: mergedMemoryProfile.budgetMax,
-        },
-        pacePreference: mergedMemoryProfile.pacePreference,
-        lengthPreference: mergedMemoryProfile.lengthPreference,
-      },
     });
   } catch (error) {
     safeLogError('Chat error', error, { conversationId: req.body?.conversationId, userId: req.user?.id });

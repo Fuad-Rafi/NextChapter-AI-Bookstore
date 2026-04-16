@@ -3,6 +3,8 @@ import Book from '../models/bookmodels.js';
 import { authenticateToken, optionalAuthenticateToken, requireRole } from '../middleware/auth.js';
 import { normalizeBookPayload } from '../utils/ragData.js';
 import { deleteBookPoint, upsertBookPoint } from '../services/qdrantService.js';
+import * as embeddingService from '../services/embeddingService.js';
+import { EMBEDDING_MODEL } from '../config.js';
 
 const router = express.Router();
 
@@ -46,6 +48,38 @@ const buildBookPayload = (body) => {
         price: parsedPrice,
         rating: parsedRating,
     };
+};
+
+const buildEmbeddingText = (book = {}) => {
+    return [
+        book.title,
+        book.author,
+        book.synopsis || book.description || '',
+        book.genre,
+        ...(Array.isArray(book.tags) ? book.tags : []),
+        ...(Array.isArray(book.themes) ? book.themes : []),
+        ...(Array.isArray(book.subjects) ? book.subjects : []),
+    ]
+        .filter(Boolean)
+        .join(' ');
+};
+
+const embedAndSyncBook = async (bookDoc) => {
+    if (!bookDoc) {
+        return;
+    }
+
+    const embeddingText = buildEmbeddingText(bookDoc);
+    const embedding = await embeddingService.embedText(embeddingText);
+
+    bookDoc.embedding = embedding;
+    bookDoc.semanticMetadata = {
+        embeddedAt: new Date(),
+        modelVersion: EMBEDDING_MODEL,
+    };
+
+    await bookDoc.save();
+    await upsertBookPoint(bookDoc);
 };
 
 // route to get all books
@@ -97,12 +131,10 @@ router.put('/:id', authenticateToken, requireRole('admin'), async (req, res) => 
             return res.status(404).json({ message: 'Book not found' });
         }
 
-        if (updatedBook.embedding?.length) {
-            try {
-                await upsertBookPoint(updatedBook);
-            } catch (error) {
-                console.warn('Qdrant update sync failed:', error.message);
-            }
+        try {
+            await embedAndSyncBook(updatedBook);
+        } catch (error) {
+            console.warn('Qdrant update sync failed:', error.message);
         }
 
         res.json(updatedBook);
@@ -153,12 +185,10 @@ router.post('/', authenticateToken, requireRole('admin'), async (request, respon
 
         const savedBook = await newBook.save();
 
-        if (savedBook.embedding?.length) {
-            try {
-                await upsertBookPoint(savedBook);
-            } catch (error) {
-                console.warn('Qdrant create sync failed:', error.message);
-            }
+        try {
+            await embedAndSyncBook(savedBook);
+        } catch (error) {
+            console.warn('Qdrant create sync failed:', error.message);
         }
 
         response.status(201).json(savedBook);

@@ -1,7 +1,9 @@
 import { QdrantClient } from '@qdrant/js-client-rest';
+import crypto from 'crypto';
 import {
   EMBEDDING_MODEL,
   QDRANT_API_KEY,
+  QDRANT_CHECK_COMPATIBILITY,
   QDRANT_COLLECTION,
   QDRANT_ENABLED,
   QDRANT_URL,
@@ -21,10 +23,24 @@ const getClient = () => {
     client = new QdrantClient({
       url: QDRANT_URL,
       apiKey: QDRANT_API_KEY || undefined,
+      checkCompatibility: QDRANT_CHECK_COMPATIBILITY,
     });
   }
 
   return client;
+};
+
+const toQdrantPointId = (mongoId) => {
+  const raw = String(mongoId || '').trim().toLowerCase();
+  if (!raw) {
+    return null;
+  }
+
+  const normalized = raw.replace(/[^a-f0-9]/g, '').padEnd(24, '0').slice(0, 24);
+  const hash = crypto.createHash('sha1').update(raw).digest('hex').slice(0, 8);
+  const hex32 = `${normalized}${hash}`;
+
+  return `${hex32.slice(0, 8)}-${hex32.slice(8, 12)}-4${hex32.slice(13, 16)}-a${hex32.slice(17, 20)}-${hex32.slice(20, 32)}`;
 };
 
 export const ensureQdrantCollection = async () => {
@@ -72,7 +88,8 @@ const toBookPayload = (book = {}) => ({
 
 export const upsertBookPoint = async (book = {}) => {
   const qdrant = getClient();
-  if (!qdrant || !Array.isArray(book.embedding) || book.embedding.length === 0 || !book._id) {
+  const pointId = toQdrantPointId(book._id);
+  if (!qdrant || !Array.isArray(book.embedding) || book.embedding.length === 0 || !pointId) {
     return false;
   }
 
@@ -82,7 +99,7 @@ export const upsertBookPoint = async (book = {}) => {
     wait: false,
     points: [
       {
-        id: String(book._id),
+        id: pointId,
         vector: book.embedding,
         payload: toBookPayload(book),
       },
@@ -94,16 +111,34 @@ export const upsertBookPoint = async (book = {}) => {
 
 export const deleteBookPoint = async (bookId) => {
   const qdrant = getClient();
-  if (!qdrant || !bookId) {
+  const pointId = toQdrantPointId(bookId);
+  if (!qdrant || !pointId) {
     return false;
   }
 
   await ensureQdrantCollection();
   await qdrant.delete(QDRANT_COLLECTION, {
     wait: false,
-    points: [String(bookId)],
+    points: [pointId],
   });
 
+  return true;
+};
+
+export const resetQdrantCollection = async () => {
+  const qdrant = getClient();
+  if (!qdrant) {
+    return false;
+  }
+
+  try {
+    await qdrant.deleteCollection(QDRANT_COLLECTION);
+  } catch {
+    // Ignore if the collection does not exist yet.
+  }
+
+  collectionReady = false;
+  await ensureQdrantCollection();
   return true;
 };
 
@@ -157,7 +192,7 @@ export const searchBookPoints = async (queryEmbedding = [], { limit = 20, filter
   });
 
   return (results || []).map((item) => ({
-    id: String(item.id),
+    id: String(item.payload?.mongoId || item.id),
     score: Number(item.score || 0),
     payload: item.payload || {},
   }));

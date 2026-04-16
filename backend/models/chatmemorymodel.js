@@ -1,10 +1,5 @@
 import mongoose from 'mongoose';
 
-const stringArray = {
-  type: [String],
-  default: [],
-};
-
 const feedbackSchema = new mongoose.Schema(
   {
     likedBookIds: {
@@ -31,33 +26,6 @@ const feedbackSchema = new mongoose.Schema(
   { _id: false }
 );
 
-const extractedPreferencesSchema = new mongoose.Schema(
-  {
-    preferredGenres: stringArray,
-    dislikedGenres: stringArray,
-    preferredAuthors: stringArray,
-    budgetMin: {
-      type: Number,
-      default: null,
-    },
-    budgetMax: {
-      type: Number,
-      default: null,
-    },
-    pacePreference: {
-      type: String,
-      default: '',
-      trim: true,
-    },
-    lengthPreference: {
-      type: String,
-      default: '',
-      trim: true,
-    },
-  },
-  { _id: false }
-);
-
 const conversationMessageSchema = new mongoose.Schema(
   {
     role: {
@@ -79,45 +47,9 @@ const conversationMessageSchema = new mongoose.Schema(
       type: feedbackSchema,
       default: () => ({}),
     },
-    extractedPreferences: {
-      type: extractedPreferencesSchema,
-      default: () => ({}),
-    },
     createdAt: {
       type: Date,
       default: Date.now,
-    },
-  },
-  { _id: false }
-);
-
-const memoryProfileSchema = new mongoose.Schema(
-  {
-    preferredGenres: stringArray,
-    dislikedGenres: stringArray,
-    preferredAuthors: stringArray,
-    budgetMin: {
-      type: Number,
-      default: null,
-    },
-    budgetMax: {
-      type: Number,
-      default: null,
-    },
-    pacePreference: {
-      type: String,
-      default: '',
-      trim: true,
-    },
-    lengthPreference: {
-      type: String,
-      default: '',
-      trim: true,
-    },
-    lastReferencedTitle: {
-      type: String,
-      default: '',
-      trim: true,
     },
   },
   { _id: false }
@@ -134,10 +66,6 @@ const chatMemorySchema = new mongoose.Schema(
     messages: {
       type: [conversationMessageSchema],
       default: [],
-    },
-    memoryProfile: {
-      type: memoryProfileSchema,
-      default: () => ({}),
     },
     summary: {
       type: String,

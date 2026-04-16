@@ -3,6 +3,17 @@ import * as embeddingService from './embeddingService.js';
 import { QDRANT_SEARCH_LIMIT } from '../config.js';
 import { isQdrantEnabled, searchBookPoints } from './qdrantService.js';
 
+let lastQdrantFallbackLogAt = 0;
+const QDRANT_FALLBACK_LOG_COOLDOWN_MS = 60 * 1000;
+
+const logQdrantFallbackError = (error) => {
+  const now = Date.now();
+  if (now - lastQdrantFallbackLogAt >= QDRANT_FALLBACK_LOG_COOLDOWN_MS) {
+    lastQdrantFallbackLogAt = now;
+    console.error('Qdrant search unavailable, falling back to Mongo vector search:', error.message);
+  }
+};
+
 const applyFilters = (books = [], filters = {}) => {
   return books.filter((book) => {
     if (Array.isArray(filters.genres) && filters.genres.length > 0) {
@@ -166,7 +177,7 @@ export const getUnifiedVectorSearch = async (queryEmbedding, filters = {}, limit
 
     return applyFilters(hydrated, filters).slice(0, limit);
   } catch (error) {
-    console.error('Error in getUnifiedVectorSearch:', error.message);
+    logQdrantFallbackError(error);
     return mongoFallbackSearch(queryEmbedding, filters, limit);
   }
 };

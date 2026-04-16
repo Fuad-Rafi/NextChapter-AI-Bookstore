@@ -3,130 +3,100 @@ import { GROQ_API_KEY } from '../config.js';
 const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
 const MODEL = process.env.GROQ_MODEL || 'llama-3.1-8b-instant';
 
-const isGreeting = (text = '') => /^(hi|hello|hey|yo|hola|assalamualaikum|good\s(morning|afternoon|evening))\b/i.test(String(text).trim());
-
 const buildSystemPrompt = () => {
   return [
-    'You are a friendly, concise book assistant.',
-    'Always recommend matching books immediately from the provided candidates.',
-    'Never ask for clarification or more information before recommending.',
-    'Explain briefly why each book matches the user request.',
-    'Suggest 1-2 refinement options (genre, price, length, pace) they can try.',
-    'Only recommend from provided candidates; never invent titles or authors.',
-    'Respond in JSON with keys: assistantReply, recommendedTitles (array of book titles).',
+    'You are a grounded book assistant.',
+    'Only use the retrieved books that are provided in context.',
+    'If the retrieved context is weak or empty, explain that no strong matches were found and suggest refinements.',
+    'Do not invent books, authors, or metadata.',
+    'Respond in JSON with keys: assistantReply, recommendedTitles (array of titles from context), and refinementHints (array of strings).',
   ].join(' ');
 };
 
-const buildCandidateLines = (candidates = []) => {
-  return candidates.map((book, index) => {
+const buildRetrievedLines = (retrievedBooks = []) => {
+  return retrievedBooks.map((book, index) => {
     const synopsis = typeof book.synopsis === 'string' && book.synopsis.trim()
       ? book.synopsis.trim()
       : (typeof book.description === 'string' ? book.description.trim() : 'No synopsis available');
 
-    return `${index + 1}. ${book.title} by ${book.author} | Genre: ${book.genre || 'N/A'} | Price: Tk ${book.price ?? 'N/A'} | Synopsis: ${synopsis}`;
+    return `${index + 1}. ${book.title} by ${book.author} | Genre: ${book.genre || 'N/A'} | Price: Tk ${book.price ?? 'N/A'} | Relevance: ${Number(book.relevanceScore || 0).toFixed(3)} | Synopsis: ${synopsis}`;
   }).join('\n');
 };
 
-const buildUserPrompt = ({ userMessage, memoryProfile = {}, conversationMessages = [], candidates = [] }) => {
-  const recentMessages = conversationMessages
-    .slice(-6)
-    .map((message) => `${message.role}: ${message.content}`)
-    .join('\n');
-
+const buildUserPrompt = ({ userMessage, retrievedBooks = [] }) => {
   return [
     `User message: ${String(userMessage || '').trim()}`,
-    `Memory profile: ${JSON.stringify(memoryProfile || {})}`,
-    `Recent chat history:\n${recentMessages || 'none'}`,
-    `IMPORTANT: You have ${candidates.length} candidate books ranked by relevance. Recommend the top 3-5 immediately.`,
-    `Candidate books:\n${buildCandidateLines(candidates) || 'none'}`,
+    `Retrieved books count: ${retrievedBooks.length}`,
+    `Retrieved books:\n${buildRetrievedLines(retrievedBooks) || 'none'}`,
+    'Task: explain why best matches fit the user request and recommend up to 3 books.',
   ].join('\n\n');
 };
 
 const parseModelJson = (content, fallbackTitles = []) => {
+  let parsed;
   try {
-    const parsed = JSON.parse(content);
-    const assistantReply = typeof parsed.assistantReply === 'string' ? parsed.assistantReply : '';
-    const recommendedTitles = Array.isArray(parsed.recommendedTitles)
-      ? parsed.recommendedTitles.filter((title) => typeof title === 'string' && title.trim())
-      : fallbackTitles;
-
-    return {
-      assistantReply,
-      recommendedTitles,
-    };
+    parsed = JSON.parse(content);
   } catch {
-    return {
-      assistantReply: String(content || ''),
-      recommendedTitles: fallbackTitles,
-    };
+    parsed = { assistantReply: String(content || '') };
   }
+
+  const assistantReply = typeof parsed.assistantReply === 'string' ? parsed.assistantReply : '';
+  const recommendedTitles = Array.isArray(parsed.recommendedTitles)
+    ? parsed.recommendedTitles.filter((title) => typeof title === 'string' && title.trim())
+    : fallbackTitles;
+  const refinementHints = Array.isArray(parsed.refinementHints)
+    ? parsed.refinementHints.filter((hint) => typeof hint === 'string' && hint.trim())
+    : [];
+
+  return {
+    assistantReply,
+    recommendedTitles,
+    refinementHints,
+  };
 };
 
-const buildFallbackReply = ({ userMessage, candidates = [], usedMemory = false }) => {
-  const text = String(userMessage || '').trim();
+const buildFallbackReply = ({ userMessage, retrievedBooks = [] }) => {
+  const top = retrievedBooks.slice(0, 3);
 
-  if (!text) {
-    return {
-      assistantReply: 'Tell me your preferred genre, mood, or budget and I will recommend matching books.',
-      recommendedTitles: [],
-      source: 'fallback-empty',
-    };
-  }
-
-  if (isGreeting(text)) {
-    return {
-      assistantReply: 'Hello! What type of books would you like? (e.g., mystery, romance, sci-fi, thriller)',
-      recommendedTitles: ['__SHOW_TOP_RANKED__'],  // Signal to show all top-ranked books
-      source: 'fallback-greeting',
-    };
-  }
-
-  const top = candidates.slice(0, 3);
   if (!top.length) {
     return {
-      assistantReply: 'I could not find strong matches right now. Share your genre, budget, or reading mood and I will refine it.',
+      assistantReply: 'I could not find strong matches for that request. Try adding a genre, author, or budget range.',
       recommendedTitles: [],
-      source: 'fallback-no-candidates',
+      refinementHints: ['Add a preferred genre', 'Try a wider price range'],
+      source: 'fallback-no-context',
     };
   }
 
-  const opening = usedMemory
-    ? 'Using your saved preferences, here are good options:'
-    : 'Here are good options from your catalog:';
-
   const picks = top
-    .map((book) => `- ${book.title} by ${book.author} (Tk ${book.price ?? 'N/A'})`)
+    .map((book, index) => `${index + 1}. ${book.title} by ${book.author} (Tk ${book.price ?? 'N/A'})`)
     .join('\n');
 
   return {
-    assistantReply: `${opening}\n${picks}\nWant me to narrow by tone, length, or price?`,
+    assistantReply: `These are the most relevant matches from your catalog:\n${picks}\nShare more detail if you want tighter results.`,
     recommendedTitles: top.map((book) => book.title),
-    source: 'fallback-local',
+    refinementHints: ['Add genre or mood', 'Set a budget cap'],
+    source: 'fallback-grounded',
   };
 };
 
 export const generateAssistantReply = async ({
   userMessage,
-  conversationMessages = [],
-  memoryProfile = {},
-  candidates = [],
+  retrievedBooks = [],
 }) => {
-  const usedMemory = Boolean((conversationMessages || []).length > 0);
-
   if (!GROQ_API_KEY) {
-    return buildFallbackReply({ userMessage, candidates, usedMemory });
+    return buildFallbackReply({ userMessage, retrievedBooks });
   }
 
   const payload = {
     model: MODEL,
-    temperature: 0.4,
+    temperature: 0.2,
     max_tokens: 450,
     response_format: { type: 'json_object' },
     messages: [
       { role: 'system', content: buildSystemPrompt() },
       {
         role: 'user',
-        content: buildUserPrompt({ userMessage, memoryProfile, conversationMessages, candidates }),
+        content: buildUserPrompt({ userMessage, retrievedBooks }),
       },
     ],
   };
@@ -151,18 +121,19 @@ export const generateAssistantReply = async ({
 
     const data = await response.json();
     const content = data?.choices?.[0]?.message?.content || '';
-    const parsed = parseModelJson(content, candidates.slice(0, 3).map((book) => book.title));
+    const parsed = parseModelJson(content, retrievedBooks.slice(0, 3).map((book) => book.title));
 
     if (!parsed.assistantReply) {
-      return buildFallbackReply({ userMessage, candidates, usedMemory });
+      return buildFallbackReply({ userMessage, retrievedBooks });
     }
 
     return {
       assistantReply: parsed.assistantReply,
       recommendedTitles: parsed.recommendedTitles,
+      refinementHints: parsed.refinementHints,
       source: 'groq',
     };
   } catch {
-    return buildFallbackReply({ userMessage, candidates, usedMemory });
+    return buildFallbackReply({ userMessage, retrievedBooks });
   }
 };

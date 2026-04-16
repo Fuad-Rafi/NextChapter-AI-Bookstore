@@ -45,11 +45,6 @@ const CustomerHome = () => {
     return saved ? JSON.parse(saved) : [];
   });
   const [feedbackState, setFeedbackState] = useState({});
-  const [profileSnapshot, setProfileSnapshot] = useState(() => {
-    // Load from localStorage to restore session
-    const saved = localStorage.getItem('profileSnapshot');
-    return saved ? JSON.parse(saved) : null;
-  });
   const messagesEndRef = useRef(null);
 
   useEffect(() => {
@@ -101,18 +96,11 @@ const CustomerHome = () => {
     localStorage.setItem('assistantRecommendations', JSON.stringify(assistantRecommendations));
   }, [assistantRecommendations]);
 
-  useEffect(() => {
-    if (profileSnapshot) {
-      localStorage.setItem('profileSnapshot', JSON.stringify(profileSnapshot));
-    }
-  }, [profileSnapshot]);
-
   const handleLogout = () => {
     // Clear conversation session from localStorage
     localStorage.removeItem('conversationId');
     localStorage.removeItem('chatMessages');
     localStorage.removeItem('assistantRecommendations');
-    localStorage.removeItem('profileSnapshot');
     logout();
     navigate('/login', { replace: true });
   };
@@ -177,7 +165,6 @@ const CustomerHome = () => {
 
       setConversationId(response.data.conversationId || conversationId);
       setAssistantRecommendations(response.data.recommendations || []);
-      setProfileSnapshot(response.data.profileSnapshot || null);
       setChatMessages((previous) => [
         ...previous,
         {
@@ -420,13 +407,6 @@ const CustomerHome = () => {
                 </form>
 
                 {chatError ? <p className="mt-2 text-xs text-red-600">{chatError}</p> : null}
-                {profileSnapshot ? (
-                  <p className="mt-2 text-xs text-gray-500">
-                    Memory: likes {profileSnapshot.preferredGenres?.join(', ') || 'not set'}; avoids{' '}
-                    {profileSnapshot.dislikedGenres?.join(', ') || 'not set'}; authors{' '}
-                    {profileSnapshot.preferredAuthors?.join(', ') || 'not set'}.
-                  </p>
-                ) : null}
               </div>
 
               <div className="flex-1 overflow-y-auto border-t border-gray-200 px-4 py-3">

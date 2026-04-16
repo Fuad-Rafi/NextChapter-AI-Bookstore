@@ -26,6 +26,7 @@ export const QDRANT_URL = String(process.env.QDRANT_URL || '').trim();
 export const QDRANT_API_KEY = String(process.env.QDRANT_API_KEY || '').trim();
 export const QDRANT_COLLECTION = String(process.env.QDRANT_COLLECTION || 'books').trim();
 export const QDRANT_SEARCH_LIMIT = Number(process.env.QDRANT_SEARCH_LIMIT || 40);
+export const QDRANT_CHECK_COMPATIBILITY = String(process.env.QDRANT_CHECK_COMPATIBILITY || '0').trim().startsWith('1');
 
 export const validateEnvironment = () => {
 	if (!mongoDBURL) {
