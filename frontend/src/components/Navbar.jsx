@@ -7,11 +7,30 @@ import { useAuth } from '../hooks/useAuth';
 import { useTheme } from '../context/ThemeContext';
 import { FiMoon, FiSun, FiLogOut } from 'react-icons/fi';
 
+function NavLink({ href, currentPath, children }) {
+  const isActive = currentPath === href;
+
+  return (
+    <Link
+      href={href}
+      className={`transition-colors font-medium border-b-2 ${isActive ? 'border-[#D34B4B] text-[#D34B4B] dark:text-[#E86A6A]' : 'border-transparent text-gray-600 dark:text-gray-300 hover:text-[#D34B4B] dark:hover:text-[#E86A6A]'}`}
+    >
+      {children}
+    </Link>
+  );
+}
+
 export default function Navbar() {
   const { user, role, logout } = useAuth();
-  const { isDarkMode, toggleDarkMode } = useTheme();
+  const { toggleDarkMode } = useTheme();
   const pathname = usePathname();
   const router = useRouter();
+  const themeIcon = (
+    <span className="relative inline-block w-[18px] h-[18px]" aria-hidden="true">
+      <FiMoon className="text-lg absolute inset-0 dark:hidden" />
+      <FiSun className="text-lg absolute inset-0 hidden dark:block" />
+    </span>
+  );
 
   // Hide extensive navbar on auth pages
   if (pathname === '/login' || pathname === '/signup') {
@@ -28,7 +47,7 @@ export default function Navbar() {
            </Link>
         </div>
         <button onClick={toggleDarkMode} className="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-800 transition text-gray-600 dark:text-gray-300">
-           {isDarkMode ? <FiSun /> : <FiMoon />}
+           {themeIcon}
         </button>
       </nav>
     );
@@ -37,15 +56,6 @@ export default function Navbar() {
   const handleLogout = () => {
     logout();
     router.replace('/login');
-  };
-
-  const NavLink = ({ href, children }) => {
-    const isActive = pathname === href;
-    return (
-      <Link href={href} className={`transition-colors font-medium border-b-2 ${isActive ? 'border-[#D34B4B] text-[#D34B4B] dark:text-[#E86A6A]' : 'border-transparent text-gray-600 dark:text-gray-300 hover:text-[#D34B4B] dark:hover:text-[#E86A6A]'}`}>
-        {children}
-      </Link>
-    );
   };
 
   return (
@@ -65,16 +75,16 @@ export default function Navbar() {
         <div className="flex items-center gap-6 text-sm whitespace-nowrap">
           {role === 'admin' ? (
             <>
-              <NavLink href="/admin/home">Home</NavLink>
-              <NavLink href="/admin/orders">Order Dashboard</NavLink>
-              <NavLink href="/books/create">Add Book</NavLink>
+              <NavLink href="/admin/home" currentPath={pathname}>Home</NavLink>
+              <NavLink href="/admin/orders" currentPath={pathname}>Order Dashboard</NavLink>
+              <NavLink href="/books/create" currentPath={pathname}>Add Book</NavLink>
             </>
           ) : (
             <>
-              <NavLink href="/">Home</NavLink>
-              <NavLink href="/assistant">Smart Assistant</NavLink>
-              <NavLink href="/my-orders">My Orders</NavLink>
-              <NavLink href="/about">About Us</NavLink>
+              <NavLink href="/" currentPath={pathname}>Home</NavLink>
+              <NavLink href="/assistant" currentPath={pathname}>Smart Assistant</NavLink>
+              <NavLink href="/my-orders" currentPath={pathname}>My Orders</NavLink>
+              <NavLink href="/about" currentPath={pathname}>About Us</NavLink>
             </>
           )}
         </div>
@@ -86,7 +96,7 @@ export default function Navbar() {
           className="p-2.5 rounded-xl bg-white/50 dark:bg-gray-800/50 shadow-sm border border-gray-200/50 dark:border-gray-700 hover:bg-white dark:hover:bg-gray-700 transition-colors text-gray-600 dark:text-gray-300 flex items-center justify-center"
           title="Toggle Dark Mode"
         >
-          {isDarkMode ? <FiSun className="text-lg" /> : <FiMoon className="text-lg" />}
+          {themeIcon}
         </button>
 
         {user ? (

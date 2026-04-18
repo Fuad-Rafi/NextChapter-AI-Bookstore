@@ -13,15 +13,36 @@ const app = express();
 
 validateEnvironment();
 
-const localOrigins = ['http://localhost:5173', 'http://localhost:5000'];
+const localOrigins = ['http://localhost:3000', 'http://localhost:3002', 'http://localhost:5000'];
 const envOrigins = process.env.CORS_ORIGIN
   ? process.env.CORS_ORIGIN.split(',').map((origin) => origin.trim()).filter(Boolean)
   : [];
 const allowedOrigins = [...new Set([...localOrigins, ...envOrigins])];
+const localhostOriginPattern = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i;
+
+const isOriginAllowed = (origin) => {
+  if (!origin) {
+    // Allow non-browser requests that do not send an Origin header.
+    return true;
+  }
+
+  if (allowedOrigins.includes(origin)) {
+    return true;
+  }
+
+  return localhostOriginPattern.test(origin);
+};
 
 // Middleware to handle CORS - single configuration
 app.use(cors({
-  origin: allowedOrigins,
+  origin: (origin, callback) => {
+    if (isOriginAllowed(origin)) {
+      callback(null, true);
+      return;
+    }
+
+    callback(new Error(`CORS blocked for origin: ${origin}`));
+  },
   methods: ['GET', 'POST', 'PUT', 'DELETE'],
   credentials: true,
   allowedHeaders: ['Content-Type', 'Authorization']
@@ -31,18 +52,31 @@ app.use(cors({
 app.use(express.json({ limit: '10mb' }));
 
 app.get('/', (req, res) => {
-  console.log('All good here');
   res.send('Hello, World!');
 });
 
+const connectionOptions = {
+  maxPoolSize: 5,
+  minPoolSize: 0,
+  maxIdleTimeMS: 30000,
+  serverSelectionTimeoutMS: 5000,
+  connectTimeoutMS: 10000,
+};
+
 let cachedConnection = global.mongooseConnection;
+let cachedConnectionPromise = global.mongooseConnectionPromise;
 
 const connectDB = async () => {
-  if (cachedConnection) {
+  if (cachedConnection && mongoose.connection.readyState === 1) {
     return cachedConnection;
   }
 
-  cachedConnection = await mongoose.connect(mongoDBURL);
+  if (!cachedConnectionPromise) {
+    cachedConnectionPromise = mongoose.connect(mongoDBURL, connectionOptions);
+    global.mongooseConnectionPromise = cachedConnectionPromise;
+  }
+
+  cachedConnection = await cachedConnectionPromise;
   global.mongooseConnection = cachedConnection;
   return cachedConnection;
 };
@@ -53,7 +87,7 @@ app.use(async (req, res, next) => {
     next();
   } catch (error) {
     safeLogError('Database connection failure', error);
-    res.status(500).json({ message: 'Database connection failed', error: error.message });
+    res.status(500).json({ message: 'Database connection failed' });
   }
 });
 
@@ -62,6 +96,23 @@ app.use('/books', bookRoutes);
 app.use('/assistant', assistantChatRoutes);
 app.use('/auth', authRoutes);
 app.use('/orders', orderRoutes);
+
+app.use((req, res) => {
+  res.status(404).json({ message: 'Route not found' });
+});
+
+app.use((error, req, res, next) => {
+  safeLogError('Unhandled API error', error, {
+    method: req?.method,
+    path: req?.originalUrl,
+  });
+
+  if (res.headersSent) {
+    return next(error);
+  }
+
+  return res.status(500).json({ message: 'Internal server error' });
+});
 
 if (process.env.VERCEL !== '1') {
   connectDB()

@@ -1,0 +1,12 @@
+export default function sitemap() {
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
+  const baseUrl = siteUrl.replace(/\/$/, '');
+  const routes = ['/', '/about', '/assistant', '/books', '/login', '/signup'];
+
+  return routes.map((route) => ({
+    url: `${baseUrl}${route}`,
+    lastModified: new Date(),
+    changeFrequency: 'weekly',
+    priority: route === '/' ? 1 : 0.7,
+  }));
+}

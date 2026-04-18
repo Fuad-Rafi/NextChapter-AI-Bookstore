@@ -1,8 +1,68 @@
 "use client";
 
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { FiChevronLeft, FiChevronRight } from 'react-icons/fi';
+
+const getDisplayImage = (book) => book?.coverImage || book?.image || '';
+
+function MiniThumb({ book }) {
+  if (!book) {
+    return null;
+  }
+
+  const image = getDisplayImage(book);
+
+  return (
+    <div className="w-26 h-32 lg:w-29 lg:h-35.5 rounded-2xl overflow-hidden shadow-sm bg-[#e8ddd2]">
+      {image ? (
+        <img
+          src={image}
+          alt={book.title}
+          className="w-full h-full object-cover"
+          loading="lazy"
+          decoding="async"
+        />
+      ) : (
+        <div className="w-full h-full flex items-center justify-center p-2 bg-[#cdb9a6]">
+          <span className="text-[10px] leading-tight text-center text-[#3d2f25] font-semibold line-clamp-3">
+            {book.title}
+          </span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function MainCard({ book, isCenter = false }) {
+  if (!book) {
+    return null;
+  }
+
+  const image = getDisplayImage(book);
+
+  return (
+    <div
+      className={`overflow-hidden rounded-2xl bg-[#d4c6b8] shadow-xl transition-all duration-500 ${
+        isCenter ? 'w-52 h-72 sm:w-64 sm:h-88 md:w-80 md:h-107.5' : 'w-38 h-56 sm:w-46 sm:h-66 md:w-57.5 md:h-79.5'
+      }`}
+    >
+      {image ? (
+        <img
+          src={image}
+          alt={book.title}
+          className="w-full h-full object-cover"
+          loading={isCenter ? 'eager' : 'lazy'}
+          decoding="async"
+        />
+      ) : (
+        <div className="w-full h-full flex items-center justify-center p-3 bg-[#c6ab91]">
+          <span className="text-center text-[#2e241d] font-semibold text-sm line-clamp-4">{book.title}</span>
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function FeaturedCarousel({ books = [] }) {
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -12,12 +72,6 @@ export default function FeaturedCarousel({ books = [] }) {
   const indexUpdateTimerRef = useRef(null);
   const ANIMATION_MS = 760;
   const AUTO_SLIDE_MS = 4200;
-
-  if (!books || books.length === 0) {
-    return null;
-  }
-
-  const totalBooks = books.length;
 
   useEffect(() => {
     return () => {
@@ -30,8 +84,12 @@ export default function FeaturedCarousel({ books = [] }) {
     };
   }, []);
 
-  const triggerSlide = (direction) => {
-    if (isAnimating || totalBooks < 2) return;
+  const totalBooks = books.length;
+
+  const triggerSlide = useCallback((direction) => {
+    if (isAnimating || totalBooks < 2) {
+      return;
+    }
 
     setSlideDirection(direction);
     setIsAnimating(true);
@@ -45,9 +103,7 @@ export default function FeaturedCarousel({ books = [] }) {
 
     indexUpdateTimerRef.current = setTimeout(() => {
       setCurrentIndex((prev) =>
-        direction === 'next'
-          ? (prev + 1) % totalBooks
-          : (prev - 1 + totalBooks) % totalBooks
+        direction === 'next' ? (prev + 1) % totalBooks : (prev - 1 + totalBooks) % totalBooks
       );
       indexUpdateTimerRef.current = null;
     }, ANIMATION_MS);
@@ -56,18 +112,12 @@ export default function FeaturedCarousel({ books = [] }) {
       setIsAnimating(false);
       animationTimerRef.current = null;
     }, ANIMATION_MS + 20);
-  };
-
-  const handlePrev = () => {
-    triggerSlide('prev');
-  };
-
-  const handleNext = () => {
-    triggerSlide('next');
-  };
+  }, [ANIMATION_MS, isAnimating, totalBooks]);
 
   useEffect(() => {
-    if (totalBooks < 2) return;
+    if (totalBooks < 2) {
+      return;
+    }
 
     const intervalId = setInterval(() => {
       triggerSlide('next');
@@ -76,14 +126,13 @@ export default function FeaturedCarousel({ books = [] }) {
     return () => {
       clearInterval(intervalId);
     };
-  }, [isAnimating, totalBooks]);
+  }, [triggerSlide, totalBooks]);
 
-  const getBookAt = (offset) => {
-    return books[(currentIndex + offset + totalBooks) % totalBooks];
-  };
+  if (totalBooks === 0) {
+    return null;
+  }
 
-  const getDisplayImage = (book) => book?.coverImage || book?.image || '';
-
+  const getBookAt = (offset) => books[(currentIndex + offset + totalBooks) % totalBooks];
   const centerBook = getBookAt(0);
   const prevBook = getBookAt(-1);
   const nextBook = getBookAt(1);
@@ -113,50 +162,6 @@ export default function FeaturedCarousel({ books = [] }) {
       : 'md:translate-x-16 lg:translate-x-20 xl:translate-x-24 opacity-85'
     : '';
 
-  const MiniThumb = ({ book }) => {
-    if (!book) return null;
-    const image = getDisplayImage(book);
-
-    return (
-      <div className="w-26 h-32 lg:w-29 lg:h-35.5 rounded-2xl overflow-hidden shadow-sm bg-[#e8ddd2]">
-        {image ? (
-          <img src={image} alt={book.title} className="w-full h-full object-cover" />
-        ) : (
-          <div className="w-full h-full flex items-center justify-center p-2 bg-[#cdb9a6]">
-            <span className="text-[10px] leading-tight text-center text-[#3d2f25] font-semibold line-clamp-3">
-              {book.title}
-            </span>
-          </div>
-        )}
-      </div>
-    );
-  };
-
-  const MainCard = ({ book, isCenter = false }) => {
-    if (!book) return null;
-    const image = getDisplayImage(book);
-
-    return (
-      <div
-        className={`overflow-hidden rounded-2xl bg-[#d4c6b8] shadow-xl transition-all duration-500 ${
-          isCenter
-            ? 'w-52 h-72 sm:w-64 sm:h-88 md:w-80 md:h-107.5'
-            : 'w-38 h-56 sm:w-46 sm:h-66 md:w-57.5 md:h-79.5'
-        }`}
-      >
-        {image ? (
-          <img src={image} alt={book.title} className="w-full h-full object-cover" />
-        ) : (
-          <div className="w-full h-full flex items-center justify-center p-3 bg-[#c6ab91]">
-            <span className="text-center text-[#2e241d] font-semibold text-sm line-clamp-4">
-              {book.title}
-            </span>
-          </div>
-        )}
-      </div>
-    );
-  };
-
   return (
     <section className="relative pt-1 sm:pt-2 pb-4 sm:pb-8">
       <div className="max-w-screen-2xl mx-auto px-1 sm:px-4 lg:px-6">
@@ -167,12 +172,7 @@ export default function FeaturedCarousel({ books = [] }) {
                 {farLeftOffsets.map((offset, index) => (
                   <div
                     key={offset}
-                    className={[
-                      'translate-y-0 -rotate-2',
-                      '-translate-y-1 rotate-1',
-                      'translate-y-1 rotate-1',
-                      '-translate-y-0.5 -rotate-1',
-                    ][index]}
+                    className={['translate-y-0 -rotate-2', '-translate-y-1 rotate-1', 'translate-y-1 rotate-1', '-translate-y-0.5 -rotate-1'][index]}
                   >
                     <MiniThumb book={getBookAt(offset)} />
                   </div>
@@ -193,12 +193,7 @@ export default function FeaturedCarousel({ books = [] }) {
                 {farRightOffsets.map((offset, index) => (
                   <div
                     key={offset}
-                    className={[
-                      'translate-y-1 rotate-1',
-                      '-translate-y-1 -rotate-1',
-                      '-translate-y-0.5 rotate-2',
-                      'translate-y-1 -rotate-2',
-                    ][index]}
+                    className={['translate-y-1 rotate-1', '-translate-y-1 -rotate-1', '-translate-y-0.5 rotate-2', 'translate-y-1 -rotate-2'][index]}
                   >
                     <MiniThumb book={getBookAt(offset)} />
                   </div>
@@ -217,7 +212,7 @@ export default function FeaturedCarousel({ books = [] }) {
           </div>
 
           <button
-            onClick={handlePrev}
+            onClick={() => triggerSlide('prev')}
             className="absolute left-[20%] sm:left-[30%] md:left-[calc(50%-166px)] lg:left-[calc(50%-174px)] xl:left-[calc(50%-182px)] top-[50%] -translate-y-1/2 z-20 w-11 h-11 rounded-full bg-white/95 border border-[#dccfbe] text-[#5f4630] hover:bg-white transition shadow-lg"
             aria-label="Previous books"
           >
@@ -225,7 +220,7 @@ export default function FeaturedCarousel({ books = [] }) {
           </button>
 
           <button
-            onClick={handleNext}
+            onClick={() => triggerSlide('next')}
             className="absolute right-[24%] sm:right-[30%] md:right-auto md:left-[calc(50%+176px)] lg:left-[calc(50%+184px)] xl:left-[calc(50%+192px)] top-[50%] -translate-y-1/2 z-20 w-11 h-11 rounded-full bg-white/95 border border-[#dccfbe] text-[#5f4630] hover:bg-white transition shadow-lg"
             aria-label="Next books"
           >

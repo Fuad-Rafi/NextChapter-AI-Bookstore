@@ -38,7 +38,7 @@ export default function AboutPage() {
             </div>
             <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-4">Our Mission</h2>
             <p className="text-gray-700 dark:text-gray-300 leading-relaxed">
-              We believe everyone deserves to discover books they'll love. NextChapter AI uses advanced machine learning and natural language processing to understand your reading preferences and connect you with books you'll truly enjoy.
+              We believe everyone deserves to discover books they&apos;ll love. NextChapter AI uses advanced machine learning and natural language processing to understand your reading preferences and connect you with books you&apos;ll truly enjoy.
             </p>
           </div>
 

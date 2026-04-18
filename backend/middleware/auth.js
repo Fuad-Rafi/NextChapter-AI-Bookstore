@@ -1,5 +1,6 @@
 import jwt from 'jsonwebtoken';
 import { JWT_SECRET } from '../config.js';
+import { safeLogError } from '../utils/securityLogger.js';
 
 /**
  * Middleware to verify JWT token from Authorization header
@@ -28,7 +29,7 @@ export const authenticateToken = (req, res, next) => {
       next();
     });
   } catch (error) {
-    console.error('Authentication error:', error.message);
+    safeLogError('Authentication middleware error', error);
     return res.status(500).json({ message: 'Authentication failed' });
   }
 };

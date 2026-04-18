@@ -5,21 +5,20 @@ import React, { createContext, useContext, useEffect, useState } from 'react';
 const ThemeContext = createContext();
 
 export const ThemeProvider = ({ children }) => {
-  const [isDarkMode, setIsDarkMode] = useState(false);
+  const [isDarkMode, setIsDarkMode] = useState(() => {
+    if (typeof window === 'undefined') {
+      return false;
+    }
+
+    const savedTheme = window.localStorage.getItem('theme');
+    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    return savedTheme === 'dark' || (!savedTheme && prefersDark);
+  });
 
   useEffect(() => {
-    // Check localStorage or system preference on mount
-    const savedTheme = localStorage.getItem('theme');
-    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-    
-    if (savedTheme === 'dark' || (!savedTheme && prefersDark)) {
-      setIsDarkMode(true);
-      document.documentElement.classList.add('dark');
-    } else {
-      setIsDarkMode(false);
-      document.documentElement.classList.remove('dark');
-    }
-  }, []);
+    document.documentElement.classList.toggle('dark', isDarkMode);
+    window.localStorage.setItem('theme', isDarkMode ? 'dark' : 'light');
+  }, [isDarkMode]);
 
   const toggleDarkMode = () => {
     setIsDarkMode((prev) => {

@@ -21,9 +21,6 @@ frontend/.env.*
 # Local vector DB/data directories
 qdrant_storage/
 
-# Documentation files
-*.md
-
 # Logs and runtime artifacts
 *.log
 npm-debug.log*

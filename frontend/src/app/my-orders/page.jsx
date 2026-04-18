@@ -16,8 +16,8 @@ export default function MyOrdersPage() {
       try {
         setLoading(true);
         setError('');
-        const response = await axios.get('/orders');
-        setOrders(response.data.orders || response.data || []);
+        const response = await axios.get('/orders/my-orders');
+        setOrders(response.data.orders || []);
       } catch (err) {
         console.error('Error fetching orders:', err);
         setError('Unable to load your orders. Please try again later.');
@@ -135,39 +135,39 @@ export default function MyOrdersPage() {
                     </div>
 
                     {/* Book Info */}
-                    {order.bookId && (
+                    {(order.bookTitle || order.bookAuthor) && (
                       <div className="border-t border-white/20 dark:border-gray-700 pt-4">
                         <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">Book Ordered</p>
                         <p className="font-bold text-gray-900 dark:text-white text-lg">
-                          {order.bookId?.title || 'Unknown Book'}
+                          {order.bookTitle || 'Unknown Book'}
                         </p>
                         <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                          {order.bookId?.author || 'Unknown Author'}
+                          {order.bookAuthor || 'Unknown Author'}
                         </p>
                       </div>
                     )}
 
                     {/* Delivery Address */}
-                    {order.address && (
+                    {order.customerAddress && (
                       <div className="border-t border-white/20 dark:border-gray-700 pt-4">
                         <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">Delivery Address</p>
-                        <p className="text-sm text-gray-900 dark:text-white">{order.address}</p>
+                        <p className="text-sm text-gray-900 dark:text-white">{order.customerAddress}</p>
                       </div>
                     )}
 
                     {/* Customer Info */}
-                    {order.userId && (
+                    {(order.customerName || order.customerPhone) && (
                       <div className="border-t border-white/20 dark:border-gray-700 pt-4 grid sm:grid-cols-2 gap-4">
                         <div>
                           <p className="text-sm text-gray-600 dark:text-gray-400">Name</p>
                           <p className="font-medium text-gray-900 dark:text-white">
-                            {order.userId?.username || 'N/A'}
+                            {order.customerName || 'N/A'}
                           </p>
                         </div>
                         <div>
-                          <p className="text-sm text-gray-600 dark:text-gray-400">Email</p>
+                          <p className="text-sm text-gray-600 dark:text-gray-400">Phone</p>
                           <p className="font-medium text-gray-900 dark:text-white truncate">
-                            {order.userId?.email || 'N/A'}
+                            {order.customerPhone || 'N/A'}
                           </p>
                         </div>
                       </div>
@@ -177,17 +177,15 @@ export default function MyOrdersPage() {
                   {/* Right Column - Summary */}
                   <div className="space-y-4 md:border-l border-white/20 dark:border-gray-700 md:pl-6">
                     {/* Price */}
-                    {order.totalPrice && (
-                      <div className="bg-linear-to-br from-amber-50 dark:from-amber-900/30 to-orange-50 dark:to-orange-900/30 rounded-xl p-4">
-                        <div className="flex items-center gap-2 text-gray-600 dark:text-gray-400 mb-1">
-                          <FiDollarSign size={16} />
-                          <span className="text-sm">Total Price</span>
-                        </div>
-                        <p className="text-3xl font-bold text-[#D34B4B] dark:text-[#FF6B6B]">
-                          Tk {order.totalPrice}
-                        </p>
+                    <div className="bg-linear-to-br from-amber-50 dark:from-amber-900/30 to-orange-50 dark:to-orange-900/30 rounded-xl p-4">
+                      <div className="flex items-center gap-2 text-gray-600 dark:text-gray-400 mb-1">
+                        <FiDollarSign size={16} />
+                        <span className="text-sm">Total Price</span>
                       </div>
-                    )}
+                      <p className="text-3xl font-bold text-[#D34B4B] dark:text-[#FF6B6B]">
+                        Tk {order.price ?? 'N/A'}
+                      </p>
+                    </div>
 
                     {/* Date */}
                     <div className="bg-linear-to-br from-blue-50 dark:from-blue-900/30 to-cyan-50 dark:to-cyan-900/30 rounded-xl p-4">
@@ -201,9 +199,9 @@ export default function MyOrdersPage() {
                     </div>
 
                     {/* Action Button */}
-                    {order.bookId?._id && (
+                    {order.bookId && (
                       <Link
-                        href={`/books/${order.bookId._id}`}
+                        href={`/books/${order.bookId}`}
                         className="block w-full text-center px-4 py-2 rounded-lg bg-linear-to-r from-[#D34B4B] to-[#FF6B6B] text-white font-semibold hover:shadow-lg transition-all hover:scale-105"
                       >
                         View Book

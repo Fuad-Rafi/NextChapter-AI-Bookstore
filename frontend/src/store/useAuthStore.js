@@ -2,6 +2,17 @@ import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 
 const emptyAuth = { token: null, role: null, user: null };
+const assistantSessionKeys = ['conversationId', 'chatMessages', 'assistantRecommendations'];
+
+const clearAssistantSession = () => {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  for (const key of assistantSessionKeys) {
+    localStorage.removeItem(key);
+  }
+};
 
 export const useAuthStore = create(
   persist(
@@ -13,7 +24,10 @@ export const useAuthStore = create(
           role: role ?? null,
           user: user ?? null,
         }),
-      logout: () => set(emptyAuth),
+      logout: () => {
+        clearAssistantSession();
+        set(emptyAuth);
+      },
     }),
     {
       name: 'book_app_auth',

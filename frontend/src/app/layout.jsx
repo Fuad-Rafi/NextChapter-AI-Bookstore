@@ -3,8 +3,22 @@ import { ThemeProvider } from '../context/ThemeContext';
 import Navbar from '../components/Navbar';
 
 export const metadata = {
-  title: 'NextChapter AI',
-  description: 'NextChapter Assistant',
+  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'),
+  title: {
+    default: 'NextChapter AI',
+    template: '%s | NextChapter AI',
+  },
+  description: 'NextChapter Assistant for book discovery, ordering, and personalized recommendations.',
+  openGraph: {
+    title: 'NextChapter AI',
+    description: 'Book discovery, ordering, and personalized recommendations.',
+    type: 'website',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'NextChapter AI',
+    description: 'Book discovery, ordering, and personalized recommendations.',
+  },
 };
 
 export default function RootLayout({ children }) {

@@ -14,6 +14,7 @@ import {
 } from '../config.js';
 
 const router = express.Router();
+const isProduction = process.env.NODE_ENV === 'production';
 
 const loginRateLimiter = createRateLimiter({
   windowMs: 60 * 1000,
@@ -102,8 +103,13 @@ router.post('/login', loginRateLimiter, async (req, res) => {
         // Compare hashed password
         isValidPassword = await bcrypt.compare(password, ADMIN_PASSWORD);
       } else {
-        // Fallback to plaintext comparison (development only - log warning)
-        console.warn('WARNING: Admin password is not hashed. Please hash it in .env file.');
+        // Keep plaintext fallback for local development only.
+        if (isProduction) {
+          safeLogError('Admin auth misconfiguration', new Error('ADMIN_PASSWORD is not a bcrypt hash in production'));
+          return res.status(500).json({ message: 'Server authentication is misconfigured' });
+        }
+
+        safeLogError('Admin auth warning', new Error('ADMIN_PASSWORD is not hashed. Use bcrypt in environment config.'));
         isValidPassword = password === ADMIN_PASSWORD;
       }
 

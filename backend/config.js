@@ -1,6 +1,7 @@
 import 'dotenv/config';
 
 export const PORT = process.env.PORT || 5000;
+const isProduction = process.env.NODE_ENV === 'production';
 
 export const mongoDBURL = process.env.MONGODB_URL || 'mongodb://localhost:27017/blog';
 
@@ -19,6 +20,11 @@ export const RATE_LIMIT_AUTH_LOGIN_PER_MINUTE = Number(process.env.RATE_LIMIT_AU
 // Embedding configuration
 export const EMBEDDING_MODEL = process.env.EMBEDDING_MODEL || 'Xenova/all-MiniLM-L6-v2';
 export const REC_SEMANTIC_WEIGHT = Number(process.env.REC_SEMANTIC_WEIGHT || 2.5);
+export const ENABLE_EMBEDDING_ON_WRITE = String(
+	process.env.ENABLE_EMBEDDING_ON_WRITE || (isProduction ? '0' : '1')
+)
+	.trim()
+	.startsWith('1');
 
 // Qdrant configuration
 export const QDRANT_ENABLED = String(process.env.QDRANT_ENABLED || '').trim().startsWith('1');
@@ -28,15 +34,21 @@ export const QDRANT_COLLECTION = String(process.env.QDRANT_COLLECTION || 'books'
 export const QDRANT_SEARCH_LIMIT = Number(process.env.QDRANT_SEARCH_LIMIT || 40);
 export const QDRANT_CHECK_COMPATIBILITY = String(process.env.QDRANT_CHECK_COMPATIBILITY || '0').trim().startsWith('1');
 
+const isBcryptHash = (value) => /^\$2[aby]\$\d{2}\$/.test(String(value || ''));
+
 export const validateEnvironment = () => {
 	if (!mongoDBURL) {
 		throw new Error('MONGODB_URL is required');
 	}
 
 	if (!JWT_SECRET || JWT_SECRET === 'change-me-in-env') {
-		if (process.env.NODE_ENV === 'production') {
+		if (isProduction) {
 			throw new Error('JWT_SECRET must be configured in production');
 		}
+	}
+
+	if (isProduction && !isBcryptHash(ADMIN_PASSWORD)) {
+		throw new Error('ADMIN_PASSWORD must be a bcrypt hash in production');
 	}
 
 	if (REQUIRE_GROQ_API_KEY && !GROQ_API_KEY) {
@@ -52,6 +64,7 @@ export const validateEnvironment = () => {
 		['RATE_LIMIT_ASSISTANT_FEEDBACK_PER_MINUTE', RATE_LIMIT_ASSISTANT_FEEDBACK_PER_MINUTE],
 		['RATE_LIMIT_AUTH_LOGIN_PER_MINUTE', RATE_LIMIT_AUTH_LOGIN_PER_MINUTE],
 		['QDRANT_SEARCH_LIMIT', QDRANT_SEARCH_LIMIT],
+		['REC_SEMANTIC_WEIGHT', REC_SEMANTIC_WEIGHT],
 	];
 
 	for (const [name, value] of numericLimits) {

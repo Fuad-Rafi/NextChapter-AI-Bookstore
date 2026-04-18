@@ -1,8 +1,4 @@
-<<<<<<< HEAD
-# MERN Book Platform with Classic RAG Assistant
-=======
 # MERN Book Platform with RAG Assistant
->>>>>>> 2747d247ecb4c131f5511c91d4d34df2eab9b0aa
 
 Last updated: 2026-04-16
 
@@ -172,8 +168,7 @@ ChatMemory
 
 ### Frontend
 - React 19
-- Vite 7
-- React Router 7
+- Next.js 15
 - Axios
 - Zustand
 - Tailwind CSS 4
@@ -264,7 +259,7 @@ npm run dev
 
 Default local URLs:
 - Backend: `http://localhost:5000`
-- Frontend: `http://localhost:5173`
+- Frontend: `http://localhost:3000`
 
 ### 5) Optional vector maintenance
 ```bash
@@ -280,7 +275,7 @@ Example `backend/.env`:
 ```env
 PORT=5000
 MONGODB_URL=mongodb://localhost:27017/blog
-CORS_ORIGIN=http://localhost:5173
+CORS_ORIGIN=http://localhost:3000
 
 JWT_SECRET=change-this
 JWT_EXPIRES_IN=7d
@@ -303,6 +298,9 @@ QDRANT_SEARCH_LIMIT=40
 QDRANT_CHECK_COMPATIBILITY=0
 
 RAG_RELEVANCE_THRESHOLD=0.35
+NEXT_PUBLIC_API_URL=http://localhost:5000
+BACKEND_URL=http://localhost:5000
+NEXT_PUBLIC_SITE_URL=http://localhost:3000
 ```
 
 Notes:
@@ -391,7 +389,10 @@ Backend:
 
 Frontend:
 - Root: `frontend`
-- Configure API proxy/runtime envs to backend URL
+- Configure `NEXT_PUBLIC_API_URL` to the deployed backend URL if you want direct browser-to-backend calls
+- Configure `BACKEND_URL` if you want to use the Vercel proxy route under `/api`
+- Configure `NEXT_PUBLIC_SITE_URL` for sitemap and metadata generation
+- Do not use localhost rewrites in production
 
 ## Testing
 

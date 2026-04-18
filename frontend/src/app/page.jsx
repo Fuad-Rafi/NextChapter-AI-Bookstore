@@ -2,22 +2,51 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import axios from '../utils/axios';
-import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { useAuth } from '../hooks/useAuth';
 import { FiSearch, FiChevronDown } from 'react-icons/fi';
 import Spinner from '../components/spinner';
 import FeaturedCarousel from '../components/FeaturedCarousel';
 
-export default function CustomerHome() {
-  const router = useRouter();
-  const { user } = useAuth();
+const CACHE_KEY = 'catalogBooksCache';
 
+const toCachedBook = (book) => ({
+  _id: book?._id,
+  title: book?.title || '',
+  author: book?.author || '',
+  coverImage: book?.coverImage || '',
+  image: book?.image || '',
+  price: typeof book?.price === 'number' ? book.price : null,
+});
+
+const writeCatalogCache = (books) => {
+  try {
+    const compactBooks = Array.isArray(books) ? books.map(toCachedBook) : [];
+    localStorage.setItem(CACHE_KEY, JSON.stringify(compactBooks));
+  } catch (error) {
+    // Cache is best-effort only; ignore quota/storage failures.
+    console.warn('Unable to cache catalog books:', error?.message || error);
+  }
+};
+
+const readCatalogCache = () => {
+  try {
+    const cached = localStorage.getItem(CACHE_KEY);
+    if (!cached) {
+      return [];
+    }
+
+    const parsed = JSON.parse(cached);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+};
+
+export default function CustomerHome() {
   const [books, setBooks] = useState([]);
   const [featuredBooks, setFeaturedBooks] = useState([]);
   const [booksError, setBooksError] = useState('');
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
 
   useEffect(() => {
@@ -38,17 +67,11 @@ export default function CustomerHome() {
           setFeaturedBooks([]);
         }
 
-        localStorage.setItem('catalogBooksCache', JSON.stringify(nextBooks));
+        writeCatalogCache(nextBooks);
       } catch (error) {
         console.error('Error fetching books:', error);
-        const cached = localStorage.getItem('catalogBooksCache');
-        if (cached) {
-          try {
-            setBooks(JSON.parse(cached));
-          } catch {
-            setBooks([]);
-          }
-        }
+        const cachedBooks = readCatalogCache();
+        setBooks(cachedBooks);
         setBooksError('Could not load live books from server. Showing cached results when available.');
       } finally {
         setLoading(false);
@@ -60,12 +83,10 @@ export default function CustomerHome() {
 
   const filteredBooks = useMemo(() => {
     return books.filter((book) => {
-      const status = String(book.status || (book.publishedDate ? 'published' : 'draft')).toLowerCase();
-      const matchesFilter = filter === 'all' || status === filter;
       const matchesSearch = (book.title || '').toLowerCase().includes(searchTerm.trim().toLowerCase());
-      return matchesFilter && matchesSearch;
+      return matchesSearch;
     });
-  }, [books, filter, searchTerm]);
+  }, [books, searchTerm]);
 
   const getDisplayImage = (book) => book.coverImage || book.image || '';
 
@@ -151,6 +172,8 @@ export default function CustomerHome() {
                           src={image}
                           alt={book.title}
                           className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                          loading="lazy"
+                          decoding="async"
                         />
                       ) : (
                         <div className="w-full h-full bg-linear-to-br from-rose-300 to-indigo-300 dark:from-rose-700 dark:to-indigo-700 flex items-center justify-center p-3">

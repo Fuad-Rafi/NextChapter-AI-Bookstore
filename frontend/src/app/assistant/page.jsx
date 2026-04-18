@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+export const dynamic = 'force-dynamic';
+
+import { useEffect, useRef, useState } from 'react';
 import axios from '../../utils/axios';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { useAuth } from '../../hooks/useAuth';
 import { FiMessageSquare, FiSend, FiThumbsDown, FiThumbsUp, FiArrowLeft } from 'react-icons/fi';
 import Spinner from '../../components/spinner';
 
@@ -17,11 +18,9 @@ const SUGGESTED_PROMPTS = [
 
 export default function AssistantPage() {
   const router = useRouter();
-  const { user } = useAuth();
 
   const [chatInput, setChatInput] = useState('');
   const [chatLoading, setChatLoading] = useState(false);
-  const [chatError, setChatError] = useState('');
   const [conversationId, setConversationId] = useState('');
   const [chatMessages, setChatMessages] = useState([
     {
@@ -35,11 +34,15 @@ export default function AssistantPage() {
 
   useEffect(() => {
     // Client-side initialization for localStorage
-    setConversationId(localStorage.getItem('conversationId') || '');
-    const savedMsg = localStorage.getItem('chatMessages');
-    if (savedMsg) setChatMessages(JSON.parse(savedMsg));
-    const savedRecs = localStorage.getItem('assistantRecommendations');
-    if (savedRecs) setAssistantRecommendations(JSON.parse(savedRecs));
+    try {
+      setConversationId(localStorage.getItem('conversationId') || '');
+      const savedMsg = localStorage.getItem('chatMessages');
+      if (savedMsg) setChatMessages(JSON.parse(savedMsg));
+      const savedRecs = localStorage.getItem('assistantRecommendations');
+      if (savedRecs) setAssistantRecommendations(JSON.parse(savedRecs));
+    } catch {
+      setConversationId('');
+    }
   }, []);
 
   useEffect(() => {
@@ -50,15 +53,29 @@ export default function AssistantPage() {
 
   // Persist conversation state to localStorage
   useEffect(() => {
-    if (conversationId) localStorage.setItem('conversationId', conversationId);
+    try {
+      if (conversationId) localStorage.setItem('conversationId', conversationId);
+    } catch {
+      // Ignore localStorage write errors.
+    }
   }, [conversationId]);
 
   useEffect(() => {
-    if (chatMessages.length > 1) localStorage.setItem('chatMessages', JSON.stringify(chatMessages));
+    try {
+      if (chatMessages.length > 1) localStorage.setItem('chatMessages', JSON.stringify(chatMessages));
+    } catch {
+      // Ignore localStorage write errors.
+    }
   }, [chatMessages]);
 
   useEffect(() => {
-    if (assistantRecommendations.length > 0) localStorage.setItem('assistantRecommendations', JSON.stringify(assistantRecommendations));
+    try {
+      if (assistantRecommendations.length > 0) {
+        localStorage.setItem('assistantRecommendations', JSON.stringify(assistantRecommendations));
+      }
+    } catch {
+      // Ignore localStorage write errors.
+    }
   }, [assistantRecommendations]);
 
   const sendFeedback = async ({ eventType, bookId }) => {
@@ -73,8 +90,8 @@ export default function AssistantPage() {
         ...previous,
         [bookId]: { ...(previous[bookId] || {}), [eventType]: true },
       }));
-    } catch (error) {
-      console.error('Feedback request failed:', error);
+    } catch {
+      // Ignore feedback telemetry errors in UI flow.
     }
   };
 
@@ -83,7 +100,6 @@ export default function AssistantPage() {
     if (!message || chatLoading) return;
 
     setChatLoading(true);
-    setChatError('');
     setChatMessages((previous) => [...previous, { role: 'user', content: message }]);
     setChatInput('');
 
@@ -100,9 +116,7 @@ export default function AssistantPage() {
         ...previous,
         { role: 'assistant', content: response.data.assistantMessage || 'I could not prepare a response right now.' },
       ]);
-    } catch (error) {
-      const errorMessage = error?.response?.data?.message || 'Assistant is unavailable right now. Please try again in a moment.';
-      setChatError(errorMessage);
+    } catch {
       setChatMessages((previous) => [
         ...previous,
         { role: 'assistant', content: 'I could not process that request. Please retry with a short preference prompt.' },

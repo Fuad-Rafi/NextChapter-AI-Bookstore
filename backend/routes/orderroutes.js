@@ -2,6 +2,7 @@ import express from 'express';
 import Order from '../models/ordermodel.js';
 import { authenticateToken, requireRole } from '../middleware/auth.js';
 import { normalizeOrderPayload } from '../utils/ragData.js';
+import { safeLogError } from '../utils/securityLogger.js';
 
 const router = express.Router();
 
@@ -13,8 +14,21 @@ router.get('/', authenticateToken, requireRole('admin'), async (req, res) => {
       orders,
     });
   } catch (error) {
-    console.error('Error fetching orders:', error.message);
+    safeLogError('Error fetching orders', error);
     return res.status(500).json({ message: 'Failed to fetch orders' });
+  }
+});
+
+router.get('/my-orders', authenticateToken, requireRole('customer'), async (req, res) => {
+  try {
+    const customerOrders = await Order.find({ customerId: req.user.id }).sort({ createdAt: -1 });
+    return res.status(200).json({
+      count: customerOrders.length,
+      orders: customerOrders,
+    });
+  } catch (error) {
+    safeLogError('Error fetching customer orders', error, { userId: req.user?.id });
+    return res.status(500).json({ message: 'Failed to fetch your orders' });
   }
 });
 
@@ -51,7 +65,7 @@ router.post('/', authenticateToken, requireRole('customer'), async (req, res) =>
       order: newOrder,
     });
   } catch (error) {
-    console.error('Error creating order:', error.message);
+    safeLogError('Error creating order', error);
     return res.status(500).json({ message: 'Failed to create order' });
   }
 });
@@ -66,7 +80,7 @@ router.delete('/:id', authenticateToken, requireRole('admin'), async (req, res) 
 
     return res.status(200).json({ message: 'Order deleted successfully' });
   } catch (error) {
-    console.error('Error deleting order:', error.message);
+    safeLogError('Error deleting order', error);
     return res.status(500).json({ message: 'Failed to delete order' });
   }
 });

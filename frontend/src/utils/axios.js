@@ -1,8 +1,9 @@
 import axios from 'axios';
 import { useAuthStore } from '../store/useAuthStore';
 
-// Base API URL
-export const API_BASE = process.env.NEXT_PUBLIC_API_URL || '/api';
+// Use a local backend in development and an explicit production backend URL on Vercel.
+export const API_BASE =
+  process.env.NEXT_PUBLIC_API_URL || (process.env.NODE_ENV === 'development' ? 'http://localhost:5000' : '/api');
 
 // Create axios instance with default config
 const axiosInstance = axios.create({

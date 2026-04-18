@@ -4,10 +4,44 @@ import { authenticateToken, optionalAuthenticateToken, requireRole } from '../mi
 import { normalizeBookPayload } from '../utils/ragData.js';
 import { deleteBookPoint, upsertBookPoint } from '../services/qdrantService.js';
 import * as embeddingService from '../services/embeddingService.js';
-import { EMBEDDING_MODEL } from '../config.js';
+import { EMBEDDING_MODEL, ENABLE_EMBEDDING_ON_WRITE } from '../config.js';
+import { safeLogError } from '../utils/securityLogger.js';
 
 const router = express.Router();
-const FEATURED_POOL_LIMIT = 9;
+const FEATURED_POOL_LIMIT = 11;
+
+const getNormalizedFeaturedBooks = async () => {
+    let featuredBooks = await Book.find({ isFeatured: true }).sort({ updatedAt: -1 });
+
+    if (featuredBooks.length > FEATURED_POOL_LIMIT) {
+        const overflowBooks = featuredBooks.slice(FEATURED_POOL_LIMIT);
+        await Book.updateMany(
+            { _id: { $in: overflowBooks.map((book) => book._id) } },
+            { $set: { isFeatured: false } }
+        );
+
+        featuredBooks = featuredBooks.slice(0, FEATURED_POOL_LIMIT);
+    }
+
+    if (featuredBooks.length < FEATURED_POOL_LIMIT) {
+        const needed = FEATURED_POOL_LIMIT - featuredBooks.length;
+        const fallbackCandidates = await Book.find({ isFeatured: { $ne: true } })
+            .sort({ createdAt: 1, _id: 1 })
+            .limit(needed)
+            .select('_id');
+
+        if (fallbackCandidates.length > 0) {
+            await Book.updateMany(
+                { _id: { $in: fallbackCandidates.map((book) => book._id) } },
+                { $set: { isFeatured: true } }
+            );
+
+            featuredBooks = await Book.find({ isFeatured: true }).sort({ updatedAt: -1 }).limit(FEATURED_POOL_LIMIT);
+        }
+    }
+
+    return featuredBooks;
+};
 
 const parseOptionalPrice = (value) => {
     if (value === '' || value === null || value === undefined) {
@@ -93,7 +127,7 @@ router.get('/', optionalAuthenticateToken, async (req, res) => {
             books
         });
     } catch (error) {
-        console.error('Error fetching books:', error.message);
+        safeLogError('Error fetching books', error);
         res.status(500).json({ message: error.message });
     }
 });
@@ -101,15 +135,15 @@ router.get('/', optionalAuthenticateToken, async (req, res) => {
 // route to get featured books for home carousel
 router.get('/featured/list', optionalAuthenticateToken, async (req, res) => {
     try {
-        const featuredBooks = await Book.find({ isFeatured: true }).sort({ updatedAt: -1 }).limit(FEATURED_POOL_LIMIT);
+        const featuredBooks = await getNormalizedFeaturedBooks();
         res.json({ count: featuredBooks.length, books: featuredBooks });
     } catch (error) {
-        console.error('Error fetching featured books:', error.message);
+        safeLogError('Error fetching featured books', error);
         res.status(500).json({ message: error.message });
     }
 });
 
-// route to mark a book as featured and replace a random existing featured book when limit is reached
+// route to mark a book as featured until the fixed pool is full
 router.post('/:id/feature', authenticateToken, requireRole('admin'), async (req, res) => {
     try {
         const targetBook = await Book.findById(req.params.id);
@@ -117,14 +151,17 @@ router.post('/:id/feature', authenticateToken, requireRole('admin'), async (req,
             return res.status(404).json({ message: 'Book not found' });
         }
 
-        const featuredBooks = await Book.find({ isFeatured: true, _id: { $ne: targetBook._id } });
-        let replacedBook = null;
+        if (targetBook.isFeatured) {
+            return res.status(400).json({ message: 'Book is already featured' });
+        }
 
-        if (featuredBooks.length >= FEATURED_POOL_LIMIT) {
-            const randomIndex = Math.floor(Math.random() * featuredBooks.length);
-            replacedBook = featuredBooks[randomIndex];
-            replacedBook.isFeatured = false;
-            await replacedBook.save();
+        const featuredBooks = await getNormalizedFeaturedBooks();
+        const featuredCount = featuredBooks.length;
+        if (featuredCount >= FEATURED_POOL_LIMIT) {
+            return res.status(409).json({
+                message: `Featured pool is full. Maximum ${FEATURED_POOL_LIMIT} books allowed.`,
+                currentCount: featuredCount,
+            });
         }
 
         targetBook.isFeatured = true;
@@ -133,10 +170,10 @@ router.post('/:id/feature', authenticateToken, requireRole('admin'), async (req,
         return res.json({
             message: 'Book added to featured carousel',
             featuredBookId: targetBook._id,
-            replacedBookId: replacedBook?._id || null,
+            replacedBookId: null,
         });
     } catch (error) {
-        console.error('Error featuring book:', error.message);
+        safeLogError('Error featuring book', error);
         return res.status(500).json({ message: error.message });
     }
 });
@@ -149,7 +186,7 @@ router.get('/:id', optionalAuthenticateToken, async (req, res) => {
         }
         res.json(book);
     } catch (error) {
-        console.error('Error fetching book:', error.message);
+        safeLogError('Error fetching book', error);
         res.status(500).json({ message: error.message });
     }
 });
@@ -175,15 +212,17 @@ router.put('/:id', authenticateToken, requireRole('admin'), async (req, res) => 
             return res.status(404).json({ message: 'Book not found' });
         }
 
-        try {
-            await embedAndSyncBook(updatedBook);
-        } catch (error) {
-            console.warn('Qdrant update sync failed:', error.message);
+        if (ENABLE_EMBEDDING_ON_WRITE) {
+            try {
+                await embedAndSyncBook(updatedBook);
+            } catch (error) {
+                safeLogError('Qdrant update sync failed', error, { bookId: updatedBook._id });
+            }
         }
 
         res.json(updatedBook);
     } catch (error) {
-        console.error('Error updating book:', error.message);
+        safeLogError('Error updating book', error);
         res.status(500).json({ message: error.message });
     }
 });
@@ -200,12 +239,12 @@ router.delete('/:id', authenticateToken, requireRole('admin'), async (req, res) 
         try {
             await deleteBookPoint(req.params.id);
         } catch (error) {
-            console.warn('Qdrant delete sync failed:', error.message);
+            safeLogError('Qdrant delete sync failed', error, { bookId: req.params.id });
         }
 
         res.json({ message: 'Book deleted successfully' });
     } catch (error) {
-        console.error('Error deleting book:', error.message);
+        safeLogError('Error deleting book', error);
         res.status(500).json({ message: error.message });
     }
 });
@@ -229,15 +268,17 @@ router.post('/', authenticateToken, requireRole('admin'), async (request, respon
 
         const savedBook = await newBook.save();
 
-        try {
-            await embedAndSyncBook(savedBook);
-        } catch (error) {
-            console.warn('Qdrant create sync failed:', error.message);
+        if (ENABLE_EMBEDDING_ON_WRITE) {
+            try {
+                await embedAndSyncBook(savedBook);
+            } catch (error) {
+                safeLogError('Qdrant create sync failed', error, { bookId: savedBook._id });
+            }
         }
 
         response.status(201).json(savedBook);
     } catch (error) {
-        console.error('Error creating book:', error.message);
+        safeLogError('Error creating book', error);
         response.status(500).json({ message: error.message });
     }
 });
