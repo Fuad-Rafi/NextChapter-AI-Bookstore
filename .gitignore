@@ -22,6 +22,7 @@ frontend/.env.*
 qdrant_storage/
 
 # Documentation files
+*.md
 
 # Logs and runtime artifacts
 *.log
