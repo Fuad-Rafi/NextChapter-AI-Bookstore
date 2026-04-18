@@ -53,6 +53,11 @@ const bookSchema = new mongoose.Schema({
     type: Boolean,
     default: true,
   },
+  isFeatured: {
+    type: Boolean,
+    default: false,
+    index: true,
+  },
   publishedDate: {
     type: Date,
     required: true,

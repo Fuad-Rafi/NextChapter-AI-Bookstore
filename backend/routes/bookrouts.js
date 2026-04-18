@@ -7,6 +7,7 @@ import * as embeddingService from '../services/embeddingService.js';
 import { EMBEDDING_MODEL } from '../config.js';
 
 const router = express.Router();
+const FEATURED_POOL_LIMIT = 9;
 
 const parseOptionalPrice = (value) => {
     if (value === '' || value === null || value === undefined) {
@@ -94,6 +95,49 @@ router.get('/', optionalAuthenticateToken, async (req, res) => {
     } catch (error) {
         console.error('Error fetching books:', error.message);
         res.status(500).json({ message: error.message });
+    }
+});
+
+// route to get featured books for home carousel
+router.get('/featured/list', optionalAuthenticateToken, async (req, res) => {
+    try {
+        const featuredBooks = await Book.find({ isFeatured: true }).sort({ updatedAt: -1 }).limit(FEATURED_POOL_LIMIT);
+        res.json({ count: featuredBooks.length, books: featuredBooks });
+    } catch (error) {
+        console.error('Error fetching featured books:', error.message);
+        res.status(500).json({ message: error.message });
+    }
+});
+
+// route to mark a book as featured and replace a random existing featured book when limit is reached
+router.post('/:id/feature', authenticateToken, requireRole('admin'), async (req, res) => {
+    try {
+        const targetBook = await Book.findById(req.params.id);
+        if (!targetBook) {
+            return res.status(404).json({ message: 'Book not found' });
+        }
+
+        const featuredBooks = await Book.find({ isFeatured: true, _id: { $ne: targetBook._id } });
+        let replacedBook = null;
+
+        if (featuredBooks.length >= FEATURED_POOL_LIMIT) {
+            const randomIndex = Math.floor(Math.random() * featuredBooks.length);
+            replacedBook = featuredBooks[randomIndex];
+            replacedBook.isFeatured = false;
+            await replacedBook.save();
+        }
+
+        targetBook.isFeatured = true;
+        await targetBook.save();
+
+        return res.json({
+            message: 'Book added to featured carousel',
+            featuredBookId: targetBook._id,
+            replacedBookId: replacedBook?._id || null,
+        });
+    } catch (error) {
+        console.error('Error featuring book:', error.message);
+        return res.status(500).json({ message: error.message });
     }
 });
 // route to get one book by ID
