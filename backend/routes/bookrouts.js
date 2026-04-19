@@ -177,6 +177,25 @@ router.post('/:id/feature', authenticateToken, requireRole('admin'), async (req,
         return res.status(500).json({ message: error.message });
     }
 });
+
+// route to unfeature a book (remove from featured list)
+router.post('/:id/unfeature', authenticateToken, requireRole('admin'), async (req, res) => {
+    try {
+        const targetBook = await Book.findById(req.params.id);
+        if (!targetBook) {
+            return res.status(404).json({ message: 'Book not found' });
+        }
+        if (!targetBook.isFeatured) {
+            return res.status(400).json({ message: 'Book is not featured' });
+        }
+        targetBook.isFeatured = false;
+        await targetBook.save();
+        return res.json({ message: 'Book removed from featured list', bookId: targetBook._id });
+    } catch (error) {
+        safeLogError('Error unfeaturing book', error);
+        return res.status(500).json({ message: error.message });
+    }
+});
 // route to get one book by ID
 router.get('/:id', optionalAuthenticateToken, async (req, res) => {
     try {
@@ -342,4 +361,4 @@ router.post('/sync-embeddings', authenticateToken, requireRole('admin'), async (
     }
 });
 
-export default router;
+export default router;

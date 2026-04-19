@@ -116,17 +116,17 @@ export default function AdminHome() {
                 {featureUpdating ? 'Adding...' : 'Add Featured Book'}
               </button>
               <Link
+                href="/admin/featured-list"
+                className="rounded-xl border border-amber-400 bg-amber-50 px-5 py-2.5 text-sm font-semibold text-amber-700 hover:bg-amber-100 hover:text-amber-900 transition shadow-sm"
+              >
+                Featured List
+              </Link>
+              <Link
                 href="/admin/orders"
                 className="rounded-xl border border-white/80 bg-white/60 px-5 py-2.5 text-sm font-semibold text-gray-700 hover:bg-white hover:text-[#D34B4B] transition shadow-sm"
               >
                 Order Dashboard
               </Link>
-              <button
-                onClick={fetchBooks}
-                className="rounded-xl border border-white/80 bg-white/60 px-5 py-2.5 text-sm font-semibold text-gray-700 hover:bg-white hover:text-blue-600 transition shadow-sm"
-              >
-                Refresh List
-              </button>
               <button
                 onClick={handleLogout}
                 className="rounded-xl border border-white/80 bg-white/60 px-5 py-2.5 text-sm font-semibold text-gray-700 hover:bg-red-50 hover:text-red-600 hover:border-red-200 transition shadow-sm"
