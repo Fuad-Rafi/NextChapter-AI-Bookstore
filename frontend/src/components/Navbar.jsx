@@ -22,14 +22,21 @@ function NavLink({ href, currentPath, children }) {
 
 export default function Navbar() {
   const { user, role, logout } = useAuth();
-  const { toggleDarkMode } = useTheme();
+  const { isDarkMode, toggleDarkMode, mounted } = useTheme();
   const pathname = usePathname();
   const router = useRouter();
-  const themeIcon = (
+  
+  // Show a placeholder or different icon during hydration if needed
+  const themeIcon = mounted ? (
     <span className="relative inline-block w-[18px] h-[18px]" aria-hidden="true">
-      <FiMoon className="text-lg absolute inset-0 dark:hidden" />
-      <FiSun className="text-lg absolute inset-0 hidden dark:block" />
+      {isDarkMode ? (
+        <FiSun className="text-lg absolute inset-0" />
+      ) : (
+        <FiMoon className="text-lg absolute inset-0" />
+      )}
     </span>
+  ) : (
+    <span className="w-[18px] h-[18px] inline-block" /> // Placeholder to prevent layout shift
   );
 
   // Hide extensive navbar on auth pages
@@ -95,6 +102,7 @@ export default function Navbar() {
           onClick={toggleDarkMode} 
           className="p-2.5 rounded-xl bg-white/50 dark:bg-gray-800/50 shadow-sm border border-gray-200/50 dark:border-gray-700 hover:bg-white dark:hover:bg-gray-700 transition-colors text-gray-600 dark:text-gray-300 flex items-center justify-center"
           title="Toggle Dark Mode"
+          aria-pressed={isDarkMode === true}
         >
           {themeIcon}
         </button>
