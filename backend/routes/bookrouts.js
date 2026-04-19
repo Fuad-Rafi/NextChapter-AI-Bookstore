@@ -13,33 +13,17 @@ const FEATURED_POOL_LIMIT = 11;
 const getNormalizedFeaturedBooks = async () => {
     let featuredBooks = await Book.find({ isFeatured: true }).sort({ updatedAt: -1 });
 
+    // Only trim if over the limit, do NOT auto-refill if under
     if (featuredBooks.length > FEATURED_POOL_LIMIT) {
         const overflowBooks = featuredBooks.slice(FEATURED_POOL_LIMIT);
         await Book.updateMany(
             { _id: { $in: overflowBooks.map((book) => book._id) } },
             { $set: { isFeatured: false } }
         );
-
         featuredBooks = featuredBooks.slice(0, FEATURED_POOL_LIMIT);
     }
 
-    if (featuredBooks.length < FEATURED_POOL_LIMIT) {
-        const needed = FEATURED_POOL_LIMIT - featuredBooks.length;
-        const fallbackCandidates = await Book.find({ isFeatured: { $ne: true } })
-            .sort({ createdAt: 1, _id: 1 })
-            .limit(needed)
-            .select('_id');
-
-        if (fallbackCandidates.length > 0) {
-            await Book.updateMany(
-                { _id: { $in: fallbackCandidates.map((book) => book._id) } },
-                { $set: { isFeatured: true } }
-            );
-
-            featuredBooks = await Book.find({ isFeatured: true }).sort({ updatedAt: -1 }).limit(FEATURED_POOL_LIMIT);
-        }
-    }
-
+    // If less than limit, just return as is (no refill)
     return featuredBooks;
 };
 
