@@ -5,6 +5,7 @@ import authRoutes from './routes/authroutes.js';
 import orderRoutes from './routes/orderroutes.js';
 import recommendationRoutes from './routes/bookrecommendations.js';
 import assistantChatRoutes from './routes/assistantchat.js';
+import seedRoutes from './routes/seedroutes.js';
 import { mongoDBURL, PORT, validateEnvironment } from './config.js';
 import { safeLogError } from './utils/securityLogger.js';
 import cors from 'cors';
@@ -96,6 +97,7 @@ app.use('/books', bookRoutes);
 app.use('/assistant', assistantChatRoutes);
 app.use('/auth', authRoutes);
 app.use('/orders', orderRoutes);
+app.use('/admin', seedRoutes);
 
 app.use((req, res) => {
   res.status(404).json({ message: 'Route not found' });
