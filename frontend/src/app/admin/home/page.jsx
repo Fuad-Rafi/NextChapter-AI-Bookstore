@@ -20,18 +20,19 @@ export default function AdminHome() {
   const [selectedBookId, setSelectedBookId] = useState('');
   const [featureUpdating, setFeatureUpdating] = useState(false);
 
+  const fetchBooks = async () => {
+    setLoading(true);
+    try {
+      const response = await axios.get('/books');
+      setBooks(response.data.books || response.data); 
+      setLoading(false);
+    } catch (error) {
+      console.error('Error fetching books:', error);
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    const fetchBooks = async () => {
-      setLoading(true);
-      try {
-        const response = await axios.get('/books');
-        setBooks(response.data.books || response.data); 
-        setLoading(false);
-      } catch (error) {
-        console.error('Error fetching books:', error);
-        setLoading(false);
-      }
-    };
     fetchBooks();
   }, []);
 

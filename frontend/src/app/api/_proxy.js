@@ -80,6 +80,8 @@ const forwardRequest = async (request, pathSegments = []) => {
     const upstreamResponse = await fetch(targetUrl, { ...init, signal: timeout.signal });
     const responseHeaders = new Headers(upstreamResponse.headers);
     responseHeaders.delete('transfer-encoding');
+    responseHeaders.delete('content-encoding');
+    responseHeaders.delete('content-length');
 
     return new Response(upstreamResponse.body, {
       status: upstreamResponse.status,
