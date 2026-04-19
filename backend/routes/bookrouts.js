@@ -293,4 +293,53 @@ router.post('/', authenticateToken, requireRole('admin'), async (request, respon
     }
 });
 
-export default router;
+// Route to sync missing embeddings for all books (admin only)
+// Critical for production: ENABLE_EMBEDDING_ON_WRITE=0 in Vercel means
+// books added via Admin panel have no vectors. Call this to fix them.
+router.post('/sync-embeddings', authenticateToken, requireRole('admin'), async (req, res) => {
+    try {
+        // Find all books that have no embedding or have an empty embedding array
+        const booksToSync = await Book.find({
+            $or: [
+                { embedding: { $exists: false } },
+                { embedding: null },
+                { embedding: { $size: 0 } },
+            ],
+        });
+
+        if (booksToSync.length === 0) {
+            return res.json({ message: 'All books already have embeddings.', synced: 0, total: 0 });
+        }
+
+        console.log(`Starting embedding sync for ${booksToSync.length} books...`);
+
+        let synced = 0;
+        let failed = 0;
+        const errors = [];
+
+        for (const book of booksToSync) {
+            try {
+                await embedAndSyncBook(book);
+                synced++;
+                console.log(`[sync] Embedded book ${book._id} (${book.title})`);
+            } catch (err) {
+                failed++;
+                errors.push({ bookId: String(book._id), title: book.title, error: err.message });
+                safeLogError('Sync embedding failed', err, { bookId: book._id });
+            }
+        }
+
+        return res.json({
+            message: `Sync complete. ${synced} books embedded, ${failed} failed.`,
+            synced,
+            failed,
+            total: booksToSync.length,
+            errors: errors.length > 0 ? errors : undefined,
+        });
+    } catch (error) {
+        safeLogError('Error in sync-embeddings', error);
+        return res.status(500).json({ message: error.message });
+    }
+});
+
+export default router;

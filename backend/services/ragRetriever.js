@@ -1,9 +1,12 @@
+import Book from '../models/bookmodels.js';
 import Order from '../models/ordermodel.js';
 import * as embeddingService from './embeddingService.js';
 import { getUnifiedVectorSearch } from './vectorSearchService.js';
 import { extractPreferenceSignals } from './memoryService.js';
 
-const DEFAULT_RELEVANCE_THRESHOLD = Number(process.env.RAG_RELEVANCE_THRESHOLD ?? 0.3);
+// Safety-net threshold — only filters out completely irrelevant noise.
+// Intentionally very low since we rely on ranking, not hard cutoffs.
+const DEFAULT_RELEVANCE_THRESHOLD = Number(process.env.RAG_RELEVANCE_THRESHOLD ?? 0.1);
 
 const isFiniteNumber = (value) => Number.isFinite(value);
 
@@ -24,6 +27,111 @@ export const classifyQueryIntent = (userQuery = '') => {
   };
 };
 
+/**
+ * Build a MongoDB price query object from budget constraints.
+ * Applies a 10% tolerance buffer on both ends.
+ */
+const buildPriceQuery = (budgetMin, budgetMax) => {
+  const price = {};
+  if (isFiniteNumber(budgetMin)) price.$gte = Math.floor(budgetMin * 0.9);
+  if (isFiniteNumber(budgetMax)) price.$lte = Math.ceil(budgetMax * 1.1);
+  return Object.keys(price).length > 0 ? price : null;
+};
+
+/**
+ * Search books directly by author name using MongoDB regex.
+ * This is the "hard guarantee" path when an author is detected in the query.
+ * Semantic search cannot reliably find books by author name alone — this fixes that.
+ */
+const searchByAuthor = async (preferredAuthors, budgetMin, budgetMax, excludeBookIds) => {
+  if (!preferredAuthors || preferredAuthors.length === 0) return [];
+
+  const orClauses = preferredAuthors.map((name) => ({
+    author: { $regex: name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), $options: 'i' },
+  }));
+
+  const query = { $or: orClauses };
+
+  const priceQuery = buildPriceQuery(budgetMin, budgetMax);
+  if (priceQuery) query.price = priceQuery;
+
+  const books = await Book.find(query).lean();
+
+  return books
+    .filter((book) => !excludeBookIds.has(String(book._id)))
+    .map((book) => ({
+      ...book,
+      // Give author-matched books a high fixed relevance so they surface at the top
+      semanticScore: 0.92,
+      isAuthorMatch: true,
+    }));
+};
+
+/**
+ * Keyword/searchText fallback: when semantic search returns nothing,
+ * use the pre-built searchText index to find basic matches.
+ */
+const searchByKeyword = async (query, budgetMin, budgetMax, excludeBookIds, limit) => {
+  // Build keyword query from the user query words
+  const keywords = query
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, '')
+    .split(/\s+/)
+    .filter((w) => w.length > 2);
+
+  if (keywords.length === 0) return [];
+
+  // Build OR-style regex patterns for each meaningful word
+  const regexPatterns = keywords.map((kw) => ({
+    searchText: { $regex: kw, $options: 'i' },
+  }));
+
+  const mongoQuery = { $or: regexPatterns };
+  const priceQuery = buildPriceQuery(budgetMin, budgetMax);
+  if (priceQuery) mongoQuery.price = priceQuery;
+
+  const books = await Book.find(mongoQuery).limit(limit * 3).lean();
+
+  return books
+    .filter((book) => !excludeBookIds.has(String(book._id)))
+    .map((book) => ({
+      ...book,
+      // Medium confidence score — these are keyword matches, not semantic
+      semanticScore: 0.55,
+      isKeywordMatch: true,
+    }));
+};
+
+/**
+ * Merge two book arrays by _id, preventing duplicates.
+ * Priority list comes first (author matches), then remainder.
+ */
+const mergeDeduped = (priority = [], secondary = []) => {
+  const seen = new Set();
+  const merged = [];
+
+  for (const book of [...priority, ...secondary]) {
+    const id = String(book._id);
+    if (!seen.has(id)) {
+      seen.add(id);
+      merged.push(book);
+    }
+  }
+
+  return merged;
+};
+
+/**
+ * Main retrieval function.
+ * 
+ * Flow:
+ *  1. Extract signals (genre, author, price) from the user query.
+ *  2. If specific author(s) detected → direct MongoDB author search (guaranteed recall).
+ *  3. Always run semantic vector search in parallel (for conceptual matching).
+ *  4. Merge: author matches first, then semantic results (deduped).
+ *  5. If still empty → keyword fallback on searchText field.
+ *  6. Apply a very low relevance threshold to filter noise.
+ */
 export const retrieveRelevantBooks = async ({
   userId,
   userQuery,
@@ -40,46 +148,97 @@ export const retrieveRelevantBooks = async ({
   }
 
   const constraints = extractPreferenceSignals(query);
+  const { preferredAuthors, budgetMin, budgetMax, preferredGenres } = constraints;
+
+  // Run order lookup and query embedding in parallel
   const [orders, queryEmbedding] = await Promise.all([
     Order.find({ customerId: userId }).lean(),
     embeddingService.embedText(query),
   ]);
 
   const excludeBookIds = new Set(
-    orders
-      .map((order) => String(order.bookRef || order.bookId || ''))
-      .filter(Boolean)
+    orders.map((o) => String(o.bookRef || o.bookId || '')).filter(Boolean)
   );
 
-  const vectorFilters = {
-    minPrice: isFiniteNumber(constraints.budgetMin) ? constraints.budgetMin : undefined,
-    maxPrice: isFiniteNumber(constraints.budgetMax) ? constraints.budgetMax : undefined,
-  };
+  // ── Step 1: Author-specific search (HIGH CONFIDENCE) ──────────────────
+  // Runs when user explicitly mentions an author (e.g., "Iris Moore books under 300 tk")
+  const [authorBooks, semanticResults] = await Promise.all([
+    searchByAuthor(preferredAuthors, budgetMin, budgetMax, excludeBookIds),
 
-  // Fetch more candidates than requested to allow for divers ranking
-  const rawResults = await getUnifiedVectorSearch(queryEmbedding, vectorFilters, Math.max(limit * 6, 30));
+    // ── Step 2: Semantic vector search ─────────────────────────────────
+    // No genre hard-filter — let the embedding handle concept matching
+    getUnifiedVectorSearch(
+      queryEmbedding,
+      {
+        // Only pass price as a hard filter (with buffer already in qdrantService)
+        minPrice: isFiniteNumber(budgetMin) ? budgetMin : undefined,
+        maxPrice: isFiniteNumber(budgetMax) ? budgetMax : undefined,
+      },
+      Math.max(limit * 6, 40)
+    ),
+  ]);
 
-  const candidatesWithScores = rawResults
+  // ── Step 3: Merge — author matches sit above semantic results ─────────
+  const semanticWithScores = semanticResults
     .filter((book) => !excludeBookIds.has(String(book._id)))
     .map((book) => ({
       ...book,
       relevanceScore: Number(book.semanticScore ?? 0),
-    }))
-    // Soft thresholding to allow slightly less similar but relevant results
-    .filter((book) => Number.isFinite(book.relevanceScore) && book.relevanceScore >= DEFAULT_RELEVANCE_THRESHOLD)
-    .sort((a, b) => b.relevanceScore - a.relevanceScore)
+    }));
+
+  const authorWithScores = authorBooks.map((book) => ({
+    ...book,
+    relevanceScore: Number(book.semanticScore ?? 0.92),
+  }));
+
+  let merged = mergeDeduped(authorWithScores, semanticWithScores);
+
+  // ── Step 4: Genre boost (soft — not a hard filter) ───────────────────
+  // Books matching the requested genre get a small relevance bump
+  if (preferredGenres.length > 0) {
+    merged = merged.map((book) => {
+      const bookGenre = String(book.genre || '').toLowerCase();
+      const genreMatch = preferredGenres.some((g) => bookGenre.includes(g) || g.includes(bookGenre));
+      return genreMatch
+        ? { ...book, relevanceScore: Math.min(1, (book.relevanceScore || 0) + 0.12) }
+        : book;
+    });
+  }
+
+  // ── Step 5: Remove low-confidence noise ──────────────────────────────
+  let candidates = merged.filter(
+    (book) => Number.isFinite(book.relevanceScore) && book.relevanceScore >= DEFAULT_RELEVANCE_THRESHOLD
+  );
+
+  // ── Step 6: Keyword fallback ──────────────────────────────────────────
+  // Only triggered if semantic + author search both returned nothing
+  if (candidates.length === 0) {
+    const keywordResults = await searchByKeyword(query, budgetMin, budgetMax, excludeBookIds, limit);
+    candidates = keywordResults.map((book) => ({
+      ...book,
+      relevanceScore: Number(book.semanticScore ?? 0.55),
+    }));
+  }
+
+  // Sort: relevanceScore desc, then by rating as tiebreaker
+  const finalBooks = candidates
+    .sort((a, b) => {
+      const scoreDiff = (b.relevanceScore || 0) - (a.relevanceScore || 0);
+      if (Math.abs(scoreDiff) > 0.01) return scoreDiff;
+      return (b.rating || 0) - (a.rating || 0);
+    })
     .slice(0, limit);
 
   return {
     query,
     relevanceThreshold: DEFAULT_RELEVANCE_THRESHOLD,
     constraints: {
-      preferredGenres: constraints.preferredGenres || [],
+      preferredGenres,
       dislikedGenres: constraints.dislikedGenres || [],
-      preferredAuthors: constraints.preferredAuthors || [],
-      budgetMin: constraints.budgetMin,
-      budgetMax: constraints.budgetMax,
+      preferredAuthors,
+      budgetMin,
+      budgetMax,
     },
-    retrievedBooks: candidatesWithScores,
+    retrievedBooks: finalBooks,
   };
 };

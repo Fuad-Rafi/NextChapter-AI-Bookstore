@@ -17,6 +17,20 @@ const KNOWN_GENRES = [
   'classic',
 ];
 
+// Words that are definitely NOT part of an author's name
+const AUTHOR_STOP_WORDS = new Set([
+  'under', 'below', 'above', 'over', 'between', 'taka', 'tk', '৳',
+  'books', 'book', 'novels', 'novel', 'price', 'budget', 'about',
+  'mystery', 'thriller', 'romance', 'fantasy', 'horror', 'fiction',
+  'science', 'biography', 'poetry', 'classic', 'drama', 'adventure',
+  'some', 'me', 'a', 'an', 'the', 'any', 'few', 'good', 'great',
+  'give', 'show', 'find', 'get', 'want', 'need', 'like', 'love',
+  'please', 'more', 'new', 'latest', 'best', 'top', 'popular',
+  'reading', 'read', 'recommend', 'suggested', 'english', 'bangla',
+  'something', 'anything', 'do', 'can', 'you', 'tell', 'suggest',
+  'of', 'and', 'or', 'in', 'for', 'with', 'from', 'by', 'at', 'to',
+]);
+
 const unique = (values = []) => [...new Set(values.filter(Boolean))];
 
 const normalizeAuthorName = (name = '') => {
@@ -35,10 +49,34 @@ const normalizeGenre = (genre) => {
   return value;
 };
 
+/**
+ * Try to extract an author name from a captured regex group.
+ * Returns null if the result looks like a genre or stop word.
+ */
+const cleanAuthorCapture = (raw = '') => {
+  if (!raw) return null;
+
+  const tokens = raw.trim().split(/\s+/);
+  // Remove leading/trailing stop words
+  const cleaned = tokens.filter(t => !AUTHOR_STOP_WORDS.has(t.toLowerCase()));
+
+  if (cleaned.length === 0) return null;
+
+  const name = cleaned.join(' ');
+  const normalized = normalizeAuthorName(name);
+
+  // Must be at least 4 chars and not a known genre
+  if (normalized.length < 4) return null;
+  if (KNOWN_GENRES.includes(normalized.toLowerCase())) return null;
+
+  return normalized;
+};
+
 export const extractPreferenceSignals = (text = '') => {
   const rawContent = String(text || '').trim();
   const content = rawContent.toLowerCase();
 
+  // ── Genre detection ──────────────────────────────────────────────────
   const preferredGenres = KNOWN_GENRES
     .filter((genre) => content.includes(genre))
     .map(normalizeGenre);
@@ -53,10 +91,7 @@ export const extractPreferenceSignals = (text = '') => {
 
   for (const pattern of dislikePatterns) {
     const match = content.match(pattern);
-    if (!match || !match[1]) {
-      continue;
-    }
-
+    if (!match || !match[1]) continue;
     const snippet = match[1];
     for (const genre of KNOWN_GENRES) {
       if (snippet.includes(genre)) {
@@ -65,6 +100,7 @@ export const extractPreferenceSignals = (text = '') => {
     }
   }
 
+  // ── Budget detection ─────────────────────────────────────────────────
   let budgetMin = null;
   let budgetMax = null;
 
@@ -74,56 +110,57 @@ export const extractPreferenceSignals = (text = '') => {
     budgetMax = Number(rangeMatch[2]);
   }
 
-  const underMatch = content.match(/(?:under|below|less than|max(?:imum)?)\s*(?:tk|taka|৳)?\s*(\d{2,4})/i);
+  // Matches: "under 300 tk", "below tk 250", "max 350 taka", "less than 400"
+  const underMatch = content.match(/(?:under|below|less than|max(?:imum)?|up to|within)\s*(?:tk|taka|৳)?\s*(\d{2,4})(?:\s*(?:tk|taka|৳))?/i);
   if (underMatch) {
     budgetMax = Number(underMatch[1]);
   }
 
-  const overMatch = content.match(/(?:over|above|more than|min(?:imum)?)\s*(?:tk|taka|৳)?\s*(\d{2,4})/i);
+  // Matches: "over 200 tk", "above 300", "minimum 250 taka"
+  const overMatch = content.match(/(?:over|above|more than|min(?:imum)?|at least)\s*(?:tk|taka|৳)?\s*(\d{2,4})/i);
   if (overMatch) {
     budgetMin = Number(overMatch[1]);
   }
 
-  const authorExclusions = [
-    'under', 'below', 'above', 'over', 'between', 'taka', 'tk', 'books', 'novels', 
-    'price', 'budget', 'about', 'want', 'get', 'buy', 'find', 'mystery', 'thriller', 
-    'romance', 'fantasy', 'horror', 'fiction', 'read', 'show', 'of'
-  ];
-  
+  // ── Author detection ─────────────────────────────────────────────────
   const preferredAuthors = [];
+
+  /**
+   * Strategy: Use multiple patterns ordered by confidence.
+   * Pattern 1 & 2 are HIGH confidence ("books by X", "X's books").
+   * Pattern 3 is MEDIUM ("give me some [Name] books").
+   * Pattern 4 is MEDIUM ("show me [Name 1] [Name 2] books").
+   * Pattern 5 is for explicit "from" keyword.
+   */
   const authorPatterns = [
-    // Pattern 1: Explicit "by" or "from" (High confidence)
-    /(?:books?\s+by|from|written by|authored by)\s+([a-z][a-z.'-]*(?:\s+[a-z][a-z.'-]*){0,3})/gi,
-    // Pattern 2: Possessive (e.g., "Humayun's books")
-    /([a-z][a-z.'-]*(?:\s+[a-z][a-z.'-]*){0,3})\s*(?:'s|’s)?\s+(?:books?|works?|novels?)/gi,
-    // Pattern 3: Expressed preference followed by author name
-    /(?:love|like|adore|prefer|want|get|buy|find)(?:\s+(?:reading\s+)?(?:books?\s+by\s+)?|\s+)([a-z][a-z.'-]*(?:\s+[a-z][a-z.'-]*){1,3})/gi,
-    // Pattern 4: Start of sentence (Confidence depends on "books" keyword)
-    /^([a-z][a-z.'-]*(?:\s+[a-z][a-z.'-]*){0,2})(?=\s+books)/gi,
+    // HIGH: "books by Iris Moore", "written by Nina Hale"
+    /(?:books?\s+by|written\s+by|authored\s+by)\s+([a-z][a-z.'-]*(?:\s+[a-z][a-z.'-]*){0,3})/gi,
+
+    // HIGH: "from Humayun Ahmed", "from Iris Moore under 300"
+    /\bfrom\s+([a-z][a-z.'-]*\s+[a-z][a-z.'-]*(?:\s+[a-z][a-z.'-]*)?)\b/gi,
+
+    // HIGH: Possessive – "Iris Moore's books", "Humayun's novels"
+    /([a-z][a-z.'-]*(?:\s+[a-z][a-z.'-]*){0,2})'s?\s+(?:books?|works?|novels?)/gi,
+
+    // MEDIUM: "[Name 1] [Name 2] books" anywhere in sentence
+    // The name must be 2+ words (reduces false positives)
+    /\b([a-z][a-z.'-]+\s+[a-z][a-z.'-]+)\s+books?\b/gi,
+
+    // MEDIUM: "give/show/get/find/want me some [Name] books"
+    /(?:give|show|get|find|want|need|send|recommend)\s+(?:me\s+)?(?:some\s+)?([a-z][a-z.'-]+\s+[a-z][a-z.'-]+)\s+books?\b/gi,
   ];
 
   for (const pattern of authorPatterns) {
     let match;
-    while ((match = pattern.exec(rawContent)) !== null) {
-      let authorName = (match[1] || '').trim();
-      if (!authorName) continue;
-      
-      // Clean up author name and validation
-      const tokens = authorName.split(/\s+/);
-      const filteredTokens = tokens.filter(t => !authorExclusions.includes(t.toLowerCase()));
-      
-      // If we filtered everything or it looks like a single generic word, skip
-      if (filteredTokens.length === 0) continue;
-      
-      authorName = filteredTokens.join(' ');
-      const author = normalizeAuthorName(authorName);
-      
-      if (author.length > 3 && !preferredAuthors.includes(author)) {
-        preferredAuthors.push(author);
+    while ((match = pattern.exec(content)) !== null) {
+      const authorName = cleanAuthorCapture(match[1]);
+      if (authorName && !preferredAuthors.includes(authorName)) {
+        preferredAuthors.push(authorName);
       }
     }
   }
 
+  // ── Reading pace/length signals (optional enrichment) ─────────────
   let pacePreference = '';
   if (/(fast-paced|fast paced|page-turner|intense)/i.test(content)) {
     pacePreference = 'fast-paced';
