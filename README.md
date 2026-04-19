@@ -1,182 +1,141 @@
+
 # MERN Book Platform with RAG Assistant
 
-Last updated: 2026-04-16
+**Last updated:** 2026-04-19
 
-A full-stack MERN application for book catalog browsing, ordering, and AI-assisted retrieval.
+A full-stack MERN application for book catalog browsing, ordering, and AI-assisted retrieval using a classic RAG (Retrieval-Augmented Generation) architecture.
 
-This version uses a classic RAG architecture:
-- Intent routing before retrieval
-- Semantic retrieval over current query only
-- Grounded generation from retrieved catalog books
-- Qdrant-first retrieval with Mongo fallback
+---
 
 ## Table of Contents
-- Overview
-- What Is Implemented
-- Current RAG Architecture
-- Retrieval and Generation Behavior
-- Auto Embedding and Qdrant Sync
-- Data Model
-- Tech Stack and Tools
-- Repository Structure
-- Local Development Setup
-- Environment Variables
-- Scripts
-- API Summary
-- Troubleshooting
-- Deployment (Vercel)
-- Testing
-- Roadmap
+- [Overview](#overview)
+- [Features](#features)
+- [Architecture](#architecture)
+- [Backend](#backend)
+- [Frontend](#frontend)
+- [AI/RAG System](#airag-system)
+- [Data Model](#data-model)
+- [Repository Structure](#repository-structure)
+- [Setup & Development](#setup--development)
+- [Environment Variables](#environment-variables)
+- [Scripts](#scripts)
+- [Testing](#testing)
+- [Deployment](#deployment)
+- [Troubleshooting](#troubleshooting)
+- [Roadmap](#roadmap)
+
+---
 
 ## Overview
-This project combines a traditional book platform with an assistant that understands natural language requests such as:
-- "i want a mystery investigative under 300 tk"
-- "show me books by Sofia Navarro under 300"
-- "recommend short thriller books"
 
-Unlike basic keyword search, this assistant uses embeddings and vector retrieval to find semantically relevant books, then generates grounded answers using only retrieved items.
+This project is a modern book platform with:
+- Customer and admin flows (signup, login, book CRUD, order management)
+- AI-powered assistant for natural language book recommendations
+- Semantic search and RAG-based chat using Qdrant and MongoDB
+- Modern React/Next.js frontend with Tailwind CSS
 
-## What Is Implemented
+---
+
+## Features
 
 ### Core Application
-- Customer signup/login with JWT
+- Customer signup/login (JWT-based)
 - Admin-protected book CRUD
 - Customer order flow
-- Catalog and detail pages
+- Catalog, detail, and order pages
 - Rate limiting and security logging
 
-### Assistant + Classic RAG
-- Chat endpoint with strict intent routing
-- Greeting and non-search messages return zero recommendations
-- Query embedding using `Xenova/all-MiniLM-L6-v2`
-- Vector retrieval from Qdrant when available
-- Automatic Mongo cosine fallback when Qdrant is unavailable
-- Relevance threshold gating to avoid random suggestions
-- Grounded LLM response from retrieved books only
+### Assistant & RAG
+- Chat endpoint with intent routing (greeting, search, clarification)
+- Query embedding with `Xenova/all-MiniLM-L6-v2`
+- Vector retrieval from Qdrant (with Mongo fallback)
+- Relevance threshold gating
+- Grounded LLM responses (no hallucinated books)
+- Transparent retrieval context in responses
+- Automatic embedding & Qdrant sync on book create/update
 
-### Recent Changes
-- Migrated recommendation-heavy flow to classic RAG orchestration
-- Removed memory-injected retrieval query construction
-- Removed business-weight ranking from chat retrieval path
-- Added `retrievedContext` in assistant response for transparency
-- Added automatic embedding + Qdrant sync on book create/update
-- Added Qdrant compatibility flag (`QDRANT_CHECK_COMPATIBILITY`)
-- Added throttled fallback error logging for Qdrant outages
+### Recent Improvements
+- Classic RAG orchestration for recommendations
+- Qdrant compatibility flag and error logging
+- Automatic fallback to Mongo search if Qdrant is down
+- Improved feedback and memory summary in chat
 
-## Current RAG Architecture
+---
+
+## Architecture
 
 ### High-Level Flow
-1. User sends a chat message.
-2. Backend validates auth and message length.
-3. Intent classifier checks greeting/empty/clarification.
-4. If query intent requires retrieval:
-   - Embed current user message (no memory/profile augmentation).
-   - Retrieve semantic candidates via vector search.
-   - Apply constraints from current message (genre/author/budget).
-   - Gate by relevance threshold.
-5. Generator produces grounded explanation from retrieved books.
-6. Response returns assistant text + grounded recommendation cards.
-7. Conversation stores transcript and retrievedBookIds per assistant turn.
+1. User sends a chat message
+2. Backend validates and classifies intent
+3. If retrieval needed:
+   - Embed message
+   - Semantic vector search (Qdrant or Mongo)
+   - Apply constraints (genre, author, budget)
+   - Gate by relevance threshold
+4. LLM generates grounded response from retrieved books
+5. Response includes assistant text, recommendations, and retrieval context
+6. Conversation memory is updated
 
-### Runtime Components
-- `backend/routes/assistantchat.js`
-- `backend/services/ragRetriever.js`
-- `backend/services/vectorSearchService.js`
-- `backend/services/qdrantService.js`
-- `backend/services/embeddingService.js`
-- `backend/services/llmService.js`
+### Key Backend Components
+- `backend/routes/assistantchat.js` (chat endpoint)
+- `backend/services/ragRetriever.js` (retrieval logic)
+- `backend/services/vectorSearchService.js` (vector search)
+- `backend/services/qdrantService.js` (Qdrant integration)
+- `backend/services/embeddingService.js` (embeddings)
+- `backend/services/llmService.js` (LLM responses)
 
-## Retrieval and Generation Behavior
+---
 
-### Intent Routing
-- Greeting/empty/clarification: assistant responds conversationally, recommendations array is empty.
-- Retrieval intent: runs semantic retrieval and grounded generation.
+## Backend
 
-### Retrieval Modes
-- `QDRANT_ENABLED=1`: query vectors are searched in Qdrant first.
-- Qdrant unavailable: falls back to Mongo cosine search automatically.
-- `QDRANT_ENABLED=0`: always uses Mongo cosine search.
+- Node.js (Express 5)
+- MongoDB (Mongoose)
+- JWT authentication
+- Qdrant for vector search (optional)
+- Modular services for embedding, retrieval, and LLM
+- Rate limiting and CORS
+- Scripts for seeding, embedding, and Qdrant sync
 
-### Grounding Rules
-- LLM is instructed to use only retrieved books.
-- No invented titles/authors allowed.
-- If context is weak or empty, assistant returns refinement guidance.
+#### Main Endpoints
+- `/books` (CRUD)
+- `/orders` (order management)
+- `/assistant/chat` (AI chat)
+- `/auth` (auth)
+- `/admin` (seed & admin)
 
-## Auto Embedding and Qdrant Sync
+---
 
-Book write operations now sync automatically:
+## Frontend
 
-### Create (`POST /books`)
-- Save book payload
-- Generate embedding from searchable text
-- Store embedding and `semanticMetadata`
-- Upsert vector point into Qdrant
+- React 19, Next.js 15
+- Tailwind CSS 4
+- Zustand for state management
+- Axios for API calls
+- Modern app directory structure (Next.js)
+- Pages for catalog, book details, admin, orders, login/signup, assistant chat
 
-### Update (`PUT /books/:id`)
-- Update book data
-- Regenerate embedding
-- Update metadata
-- Upsert updated point into Qdrant
+---
 
-### Delete (`DELETE /books/:id`)
-- Delete from Mongo
-- Delete vector point from Qdrant
+## AI/RAG System
 
-Implementation is in `backend/routes/bookrouts.js`.
+- Embedding model: `Xenova/all-MiniLM-L6-v2` (via `@xenova/transformers`)
+- Qdrant (`@qdrant/js-client-rest`) for vector retrieval
+- Fallback to MongoDB cosine search if Qdrant is unavailable
+- LLM generation (optionally Groq, with local fallback)
+- Strict grounding: LLM can only use retrieved books
+- Automatic embedding and Qdrant sync on book create/update/delete
+
+---
 
 ## Data Model
 
-### Collections
-- `users`
-- `books`
-- `orders`
-- `chatmemories`
+### MongoDB Collections
+- `users`: preferences, feedback, assistant memory
+- `books`: title, author, genre, synopsis, price, rating, embedding, semantic metadata
+- `orders`: order details
+- `chatmemories`: chat history, retrieved book IDs, feedback, summary
 
-### Key Fields
-
-User
-- `preferences` (legacy preference fields for profile/feedback)
-- `feedbackProfile` (like/dislike/click/view ids)
-- `assistantMemory` (legacy summary metadata)
-
-Book
-- `title`, `author`, `genre`, `synopsis`, `price`, `rating`, etc.
-- `embedding` (384-dim vector)
-- `semanticMetadata` (`embeddedAt`, `modelVersion`)
-
-ChatMemory
-- `messages[]` with `role`, `content`, `retrievedBookIds`, `feedback`, `createdAt`
-- `summary`
-- `lastMessageAt`
-
-## Tech Stack and Tools
-
-### Backend
-- Node.js
-- Express 5
-- MongoDB + Mongoose
-- JWT (`jsonwebtoken`)
-- `bcryptjs`
-- CORS
-- `nodemon`
-
-### AI / RAG
-- `@xenova/transformers`
-- Embedding model: `Xenova/all-MiniLM-L6-v2`
-- Qdrant (`@qdrant/js-client-rest`) for vector retrieval
-- Optional Groq text generation with local grounded fallback
-
-### Frontend
-- React 19
-- Next.js 15
-- Axios
-- Zustand
-- Tailwind CSS 4
-
-### Testing
-- Node test runner (`node --test`)
-- `mongodb-memory-server`
-- `supertest`
+---
 
 ## Repository Structure
 
@@ -189,9 +148,11 @@ backend/
   routes/
     assistantchat.js
     bookrouts.js
+    ...
   scripts/
     embedBooks.mjs
     syncQdrant.mjs
+    ...
   services/
     embeddingService.js
     llmService.js
@@ -205,17 +166,26 @@ backend/
 frontend/
   api/
   src/
+    app/
+    assets/
+    components/
+    context/
+    hooks/
+    store/
+    utils/
 ```
 
-## Local Development Setup
+---
+
+## Setup & Development
 
 ### Prerequisites
 - Node.js 18+
 - npm
-- MongoDB local instance
-- Optional Qdrant at `http://localhost:6333` (Docker or local binary)
+- MongoDB (local or remote)
+- (Optional) Qdrant at `http://localhost:6333` (Docker or binary)
 
-### 1) Install dependencies
+### 1. Install dependencies
 
 Backend:
 ```bash
@@ -229,21 +199,18 @@ cd frontend
 npm install
 ```
 
-### 2) Configure environment
-Create `backend/.env` with required variables.
+### 2. Configure environment
+Copy `backend/.env.example` to `backend/.env` and fill in required values.
 
-### 3) Seed catalog
+### 3. Seed catalog
 ```bash
 cd backend
 npm run seed:phase2
+# For richer data:
+- Backend: `http://localhost:5000`
 ```
 
-Optional richer data:
-```bash
-npm run seed:phase3
-```
-
-### 4) Run services
+### 4. Run services
 
 Backend:
 ```bash
@@ -258,8 +225,7 @@ npm run dev
 ```
 
 Default local URLs:
-- Backend: `http://localhost:5000`
-- Frontend: `http://localhost:3000`
+- Frontend: `http://localhost:3002`
 
 ### 5) Optional vector maintenance
 ```bash
@@ -275,7 +241,7 @@ Example `backend/.env`:
 ```env
 PORT=5000
 MONGODB_URL=mongodb://localhost:27017/blog
-CORS_ORIGIN=http://localhost:3000
+CORS_ORIGIN=http://localhost:3002
 
 JWT_SECRET=change-this
 JWT_EXPIRES_IN=7d
@@ -300,7 +266,7 @@ QDRANT_CHECK_COMPATIBILITY=0
 RAG_RELEVANCE_THRESHOLD=0.35
 NEXT_PUBLIC_API_URL=http://localhost:5000
 BACKEND_URL=http://localhost:5000
-NEXT_PUBLIC_SITE_URL=http://localhost:3000
+NEXT_PUBLIC_SITE_URL=http://localhost:3002
 ```
 
 Notes:

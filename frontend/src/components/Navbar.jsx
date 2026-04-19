@@ -5,7 +5,8 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '../hooks/useAuth';
 import { useTheme } from '../context/ThemeContext';
-import { FiMoon, FiSun, FiLogOut } from 'react-icons/fi';
+import { FiLogOut } from 'react-icons/fi';
+import '../toggle-switch.css';
 
 function NavLink({ href, currentPath, children }) {
   const isActive = currentPath === href;
@@ -26,17 +27,27 @@ export default function Navbar() {
   const pathname = usePathname();
   const router = useRouter();
   
-  // Show a placeholder or different icon during hydration if needed
-  const themeIcon = mounted ? (
-    <span className="relative inline-block w-[18px] h-[18px]" aria-hidden="true">
-      {isDarkMode ? (
-        <FiSun className="text-lg absolute inset-0" />
-      ) : (
-        <FiMoon className="text-lg absolute inset-0" />
-      )}
-    </span>
-  ) : (
-    <span className="w-[18px] h-[18px] inline-block" /> // Placeholder to prevent layout shift
+
+  // Custom toggle switch for dark mode
+  const darkModeSwitch = (
+    <div className="flex items-center gap-2">
+      <div className="toggle-container" style={{ minWidth: 60, height: 32 }}>
+        <input
+          type="checkbox"
+          id="darkmode-toggle"
+          checked={!!isDarkMode}
+          onChange={toggleDarkMode}
+          disabled={!mounted}
+          aria-checked={!!isDarkMode}
+          aria-label="Toggle dark mode"
+        />
+        <label htmlFor="darkmode-toggle" className="toggle-button" style={{ width: 56, height: 28 }}>
+          <span className="texture"></span>
+          <span className="glow"></span>
+        </label>
+      </div>
+      <span className="text-xs md:text-sm font-medium text-gray-700 dark:text-gray-200 select-none">Dark Mode</span>
+    </div>
   );
 
   // Hide extensive navbar on auth pages
@@ -53,9 +64,7 @@ export default function Navbar() {
              NextChapter<br/>AI
            </Link>
         </div>
-        <button onClick={toggleDarkMode} className="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-800 transition text-gray-600 dark:text-gray-300">
-           {themeIcon}
-        </button>
+          {darkModeSwitch}
       </nav>
     );
   }
@@ -98,14 +107,7 @@ export default function Navbar() {
       </div>
 
       <div className="flex items-center gap-4 ml-auto">
-        <button 
-          onClick={toggleDarkMode} 
-          className="p-2.5 rounded-xl bg-white/50 dark:bg-gray-800/50 shadow-sm border border-gray-200/50 dark:border-gray-700 hover:bg-white dark:hover:bg-gray-700 transition-colors text-gray-600 dark:text-gray-300 flex items-center justify-center"
-          title="Toggle Dark Mode"
-          aria-pressed={isDarkMode === true}
-        >
-          {themeIcon}
-        </button>
+        {darkModeSwitch}
 
         {user ? (
           <button 

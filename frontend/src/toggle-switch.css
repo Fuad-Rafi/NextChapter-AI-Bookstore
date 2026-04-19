@@ -1,0 +1,188 @@
+/* From Uiverse.io by chase2k25 */
+
+.toggle-container {
+  perspective: 1000px;
+  position: relative;
+  height: 32px;
+}
+
+.toggle-container input {
+  display: none;
+}
+
+.toggle-button {
+  position: relative;
+  width: 56px;
+  height: 28px;
+  background: linear-gradient(145deg, #4a4a3a, #5a5a4a);
+  border-radius: 14px;
+  box-shadow:
+    3px 3px 8px rgba(0,0,0,0.3),
+    -2px -2px 6px rgba(255,140,0,0.08),
+    inset 0 2px 4px rgba(255,255,255,0.08),
+    inset 0 -2px 4px rgba(0,0,0,0.3);
+  cursor: pointer;
+  transition: all 0.4s cubic-bezier(0.68,-0.55,0.265,1.55);
+  transform-style: preserve-3d;
+  transform: translateZ(0);
+}
+
+/* Engraved track with micro-texture */
+.toggle-button::after {
+  content: "";
+  position: absolute;
+  width: 50px;
+  height: 20px;
+  background: linear-gradient(145deg, rgba(255,69,0,0.18), rgba(0,0,0,0.4));
+  border-radius: 10px;
+  top: 4px;
+  left: 3px;
+  box-shadow:
+    inset 0 0 6px rgba(0,0,0,0.5),
+    inset 0 0 2px rgba(255,140,0,0.18),
+    inset 0 0 1px rgba(255,255,255,0.04);
+  transition: all 0.4s cubic-bezier(0.68,-0.55,0.265,1.55);
+  pointer-events: none;
+}
+
+/* Textured, gem-like knob */
+.toggle-button::before {
+  content: "";
+  position: absolute;
+  width: 24px;
+  height: 24px;
+  background: radial-gradient(circle at 30% 20%, #ff4500, #ff8c00);
+  border-radius: 50%;
+  top: 2px;
+  left: 2px;
+  box-shadow:
+    2px 2px 5px rgba(0,0,0,0.4),
+    -2px -2px 5px rgba(255,255,255,0.10),
+    inset 0 -1px 2px rgba(0,0,0,0.5),
+    inset 0 1px 2px rgba(255,255,255,0.18),
+    1px 1px 2px rgba(255,255,255,0.12);
+  transition: all 0.4s cubic-bezier(0.77,-0.4,0.3,1.4);
+  transform: translateZ(10px) scale(1);
+  z-index: 2;
+}
+
+/* Subtle texture overlay for knob */
+.toggle-button .texture {
+  position: absolute;
+  width: 24px;
+  height: 24px;
+  background: radial-gradient(circle, rgba(255,255,255,0.08), transparent);
+  border-radius: 50%;
+  top: 2px;
+  left: 2px;
+  opacity: 0.25;
+  transition: all 0.4s cubic-bezier(0.77,-0.4,0.3,1.4);
+  transform: translateZ(11px);
+  pointer-events: none;
+}
+
+/* Minimal glow for realism */
+.toggle-button .glow {
+  position: absolute;
+  width: 28px;
+  height: 28px;
+  background: radial-gradient(circle, rgba(255,140,0,0.18), transparent);
+  border-radius: 50%;
+  top: 0;
+  left: 0;
+  opacity: 0;
+  transition: all 0.3s cubic-bezier(0.4,0,0.2,1);
+  transform: translateZ(8px);
+  pointer-events: none;
+}
+
+/* Checked state */
+.toggle-container input:checked ~ .toggle-button {
+  background: linear-gradient(145deg, #3a4a3a, #4a5a4a);
+  box-shadow:
+    3px 3px 8px rgba(0,0,0,0.3),
+    -2px -2px 6px rgba(154,205,50,0.08),
+    inset 0 2px 4px rgba(255,255,255,0.08),
+    inset 0 -2px 4px rgba(0,0,0,0.3);
+}
+
+.toggle-container input:checked ~ .toggle-button::before {
+  left: 30px;
+  background: radial-gradient(circle at 30% 20%, #9acd32, #32cd32);
+  transform: translateZ(10px) rotate(360deg) scale(1.08);
+  box-shadow:
+    2px 2px 5px rgba(0,0,0,0.4),
+    -2px -2px 5px rgba(255,255,255,0.10),
+    inset 0 -1px 2px rgba(0,0,0,0.5),
+    inset 0 1px 2px rgba(255,255,255,0.18),
+    1px 1px 2px rgba(255,255,255,0.12);
+}
+
+.toggle-container input:checked ~ .toggle-button::after {
+  background: linear-gradient(145deg, rgba(154,205,50,0.18), rgba(0,0,0,0.4));
+  box-shadow:
+    inset 0 0 6px rgba(0,0,0,0.5),
+    inset 0 0 2px rgba(154,205,50,0.18),
+    inset 0 0 1px rgba(255,255,255,0.04);
+}
+
+.toggle-container input:checked ~ .toggle-button .glow {
+  background: radial-gradient(circle, rgba(154,205,50,0.18), transparent);
+  left: 26px;
+  opacity: 0.4;
+}
+
+.toggle-container input:checked ~ .toggle-button .texture {
+  left: 30px;
+  background: radial-gradient(circle, rgba(255,255,255,0.10), transparent);
+}
+
+
+.toggle-button:hover {
+  box-shadow:
+    4px 4px 12px rgba(0,0,0,0.25),
+    -3px -3px 8px rgba(255,140,0,0.10);
+  transform: translateZ(2px);
+}
+
+.toggle-button:hover::before {
+  transform: translateZ(12px) scale(1.04);
+  box-shadow:
+    2px 2px 5px rgba(0,0,0,0.4),
+    -2px -2px 5px rgba(255,255,255,0.13),
+    inset 0 -1px 2px rgba(0,0,0,0.5),
+    inset 0 1px 2px rgba(255,255,255,0.18);
+}
+
+/* Active effect */
+.toggle-button:active::before {
+  transform: translateZ(7px) scale(0.95);
+  box-shadow:
+    1px 1px 3px rgba(0,0,0,0.5),
+    -1px -1px 3px rgba(255,255,255,0.07),
+    inset 0 -1px 2px rgba(0,0,0,0.6),
+    inset 0 1px 2px rgba(255,255,255,0.13);
+}
+
+/* Micro-interaction animations */
+@keyframes track-vibrate {
+  0%, 100% { transform: translateZ(0) translateY(0); }
+  50% { transform: translateZ(0) translateY(-0.5px); }
+}
+@keyframes knob-pulse {
+  0%, 100% { transform: translateZ(10px) scale(1); }
+  50% { transform: translateZ(10px) scale(1.06); }
+}
+@keyframes track-etch {
+  0%, 100% { box-shadow: inset 0 0 4px rgba(255,140,0,0.13); }
+  50% { box-shadow: inset 0 0 7px rgba(255,140,0,0.22); }
+}
+.toggle-button {
+  animation: track-vibrate 0.08s ease-in-out 0.2s 2;
+}
+.toggle-container input:checked ~ .toggle-button::before {
+  animation: knob-pulse 1.2s infinite ease-in-out;
+}
+.toggle-container input:checked ~ .toggle-button::after {
+  animation: track-etch 1.5s infinite ease-in-out;
+}
