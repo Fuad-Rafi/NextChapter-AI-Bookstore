@@ -67,6 +67,8 @@ export default function CreateBook() {
       router.push('/admin/home');
     } catch (error) {
       console.error('Error creating book:', error);
+      const message = error?.response?.data?.message || 'Failed to create book. Please check the network tab or server logs.';
+      alert(message);
       setLoading(false);
     }
   };

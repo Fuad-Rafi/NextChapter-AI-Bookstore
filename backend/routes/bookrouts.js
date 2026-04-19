@@ -252,13 +252,20 @@ router.delete('/:id', authenticateToken, requireRole('admin'), async (req, res) 
 //route to create a new book (admin only)
 router.post('/', authenticateToken, requireRole('admin'), async (request, response) => {
     try {
+        console.log('Book creation request received. Payload:', JSON.stringify(request.body, null, 2));
         const payload = buildBookPayload(request.body);
 
         if (!payload) {
+            console.warn('Book payload validation failed: Invalid price or rating');
             return response.status(400).json({ message: 'Invalid price value' });
         }
 
         if (!payload.title || !payload.author || !payload.publishedDate) {
+            console.warn('Book payload validation failed: Missing required fields', {
+                title: !!payload.title,
+                author: !!payload.author,
+                publishedDate: !!payload.publishedDate
+            });
             return response.status(400).json({ message: 'Missing required fields' });
         }
 
@@ -267,10 +274,13 @@ router.post('/', authenticateToken, requireRole('admin'), async (request, respon
         });
 
         const savedBook = await newBook.save();
+        console.log(`Book successfully saved to database with ID: ${savedBook._id}`);
 
         if (ENABLE_EMBEDDING_ON_WRITE) {
+            console.log(`Starting embedding generation for book ${savedBook._id}...`);
             try {
                 await embedAndSyncBook(savedBook);
+                console.log(`Embedding generation and sync successful for book ${savedBook._id}`);
             } catch (error) {
                 safeLogError('Qdrant create sync failed', error, { bookId: savedBook._id });
             }

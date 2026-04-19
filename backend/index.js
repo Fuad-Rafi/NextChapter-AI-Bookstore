@@ -73,6 +73,8 @@ const connectDB = async () => {
   }
 
   if (!cachedConnectionPromise) {
+    const maskedUrl = mongoDBURL.replace(/\/\/.*@/, '//****:****@');
+    console.log(`Connecting to MongoDB at ${maskedUrl}`);
     cachedConnectionPromise = mongoose.connect(mongoDBURL, connectionOptions);
     global.mongooseConnectionPromise = cachedConnectionPromise;
   }

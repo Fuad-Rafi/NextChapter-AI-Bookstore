@@ -121,6 +121,12 @@ export default function AdminHome() {
                 Order Dashboard
               </Link>
               <button
+                onClick={fetchBooks}
+                className="rounded-xl border border-white/80 bg-white/60 px-5 py-2.5 text-sm font-semibold text-gray-700 hover:bg-white hover:text-blue-600 transition shadow-sm"
+              >
+                Refresh List
+              </button>
+              <button
                 onClick={handleLogout}
                 className="rounded-xl border border-white/80 bg-white/60 px-5 py-2.5 text-sm font-semibold text-gray-700 hover:bg-red-50 hover:text-red-600 hover:border-red-200 transition shadow-sm"
               >
