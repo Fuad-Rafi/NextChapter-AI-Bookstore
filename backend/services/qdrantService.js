@@ -145,22 +145,18 @@ export const resetQdrantCollection = async () => {
 const buildQdrantFilter = (filters = {}) => {
   const must = [];
 
-  if (Array.isArray(filters.genres) && filters.genres.length > 0) {
-    must.push({
-      key: 'genre',
-      match: {
-        any: filters.genres,
-      },
-    });
-  }
+  // Remove hard genre filter from vector search to allow semantic discovery.
+  // We will instead BOOST genre matches during the ranking phase.
 
   if (typeof filters.minPrice === 'number' || typeof filters.maxPrice === 'number') {
     const range = {};
     if (typeof filters.minPrice === 'number') {
-      range.gte = filters.minPrice;
+      // 10% buffer lower for minPrice
+      range.gte = filters.minPrice * 0.9;
     }
     if (typeof filters.maxPrice === 'number') {
-      range.lte = filters.maxPrice;
+      // 10% buffer higher for maxPrice to catch "close matches"
+      range.lte = filters.maxPrice * 1.1;
     }
 
     must.push({

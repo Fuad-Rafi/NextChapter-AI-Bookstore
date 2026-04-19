@@ -3,29 +3,9 @@ import * as embeddingService from './embeddingService.js';
 import { getUnifiedVectorSearch } from './vectorSearchService.js';
 import { extractPreferenceSignals } from './memoryService.js';
 
-const DEFAULT_RELEVANCE_THRESHOLD = Number(process.env.RAG_RELEVANCE_THRESHOLD ?? 0.35);
+const DEFAULT_RELEVANCE_THRESHOLD = Number(process.env.RAG_RELEVANCE_THRESHOLD ?? 0.3);
 
 const isFiniteNumber = (value) => Number.isFinite(value);
-
-const normalize = (value) => String(value || '').trim().toLowerCase();
-
-const includesInsensitive = (values = [], target = '') => {
-  const needle = normalize(target);
-  if (!needle) {
-    return false;
-  }
-
-  return values.some((value) => normalize(value) === needle);
-};
-
-const authorMatches = (bookAuthor = '', preferredAuthors = []) => {
-  const normalizedBookAuthor = normalize(bookAuthor);
-  if (!normalizedBookAuthor || !preferredAuthors.length) {
-    return false;
-  }
-
-  return preferredAuthors.some((author) => normalizedBookAuthor.includes(normalize(author)));
-};
 
 export const classifyQueryIntent = (userQuery = '') => {
   const text = String(userQuery || '').trim();
@@ -76,39 +56,16 @@ export const retrieveRelevantBooks = async ({
     maxPrice: isFiniteNumber(constraints.budgetMax) ? constraints.budgetMax : undefined,
   };
 
-  const rawResults = await getUnifiedVectorSearch(queryEmbedding, vectorFilters, Math.max(limit * 4, 20));
+  // Fetch more candidates than requested to allow for divers ranking
+  const rawResults = await getUnifiedVectorSearch(queryEmbedding, vectorFilters, Math.max(limit * 6, 30));
 
-  const filteredByConstraints = rawResults.filter((book) => {
-    if (excludeBookIds.has(String(book._id))) {
-      return false;
-    }
-
-    if (constraints.preferredGenres?.length > 0) {
-      if (!includesInsensitive(constraints.preferredGenres, book.genre)) {
-        return false;
-      }
-    }
-
-    if (constraints.dislikedGenres?.length > 0) {
-      if (includesInsensitive(constraints.dislikedGenres, book.genre)) {
-        return false;
-      }
-    }
-
-    if (constraints.preferredAuthors?.length > 0) {
-      if (!authorMatches(book.author, constraints.preferredAuthors)) {
-        return false;
-      }
-    }
-
-    return true;
-  });
-
-  const enriched = filteredByConstraints
+  const candidatesWithScores = rawResults
+    .filter((book) => !excludeBookIds.has(String(book._id)))
     .map((book) => ({
       ...book,
       relevanceScore: Number(book.semanticScore ?? 0),
     }))
+    // Soft thresholding to allow slightly less similar but relevant results
     .filter((book) => Number.isFinite(book.relevanceScore) && book.relevanceScore >= DEFAULT_RELEVANCE_THRESHOLD)
     .sort((a, b) => b.relevanceScore - a.relevanceScore)
     .slice(0, limit);
@@ -123,6 +80,6 @@ export const retrieveRelevantBooks = async ({
       budgetMin: constraints.budgetMin,
       budgetMax: constraints.budgetMax,
     },
-    retrievedBooks: enriched,
+    retrievedBooks: candidatesWithScores,
   };
 };

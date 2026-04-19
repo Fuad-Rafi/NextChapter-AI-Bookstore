@@ -84,18 +84,41 @@ export const extractPreferenceSignals = (text = '') => {
     budgetMin = Number(overMatch[1]);
   }
 
+  const authorExclusions = [
+    'under', 'below', 'above', 'over', 'between', 'taka', 'tk', 'books', 'novels', 
+    'price', 'budget', 'about', 'want', 'get', 'buy', 'find', 'mystery', 'thriller', 
+    'romance', 'fantasy', 'horror', 'fiction', 'read', 'show', 'of'
+  ];
+  
   const preferredAuthors = [];
   const authorPatterns = [
-    /(?:love|like|adore|prefer)(?:\s+(?:reading\s+)?(?:books?\s+by\s+)?|\s+)([a-z][a-z.'-]*(?:\s+[a-z][a-z.'-]*){0,3})(?:\s+(?:books?|novels?|works?))?/gi,
-    /(?:books?\s+by|from|written by)\s+([a-z][a-z.'-]*(?:\s+[a-z][a-z.'-]*){0,3})/gi,
-    /([a-z][a-z.'-]*(?:\s+[a-z][a-z.'-]*){0,3})'s\s+(?:books?|works?|novels?)/gi,
+    // Pattern 1: Explicit "by" or "from" (High confidence)
+    /(?:books?\s+by|from|written by|authored by)\s+([a-z][a-z.'-]*(?:\s+[a-z][a-z.'-]*){0,3})/gi,
+    // Pattern 2: Possessive (e.g., "Humayun's books")
+    /([a-z][a-z.'-]*(?:\s+[a-z][a-z.'-]*){0,3})\s*(?:'s|’s)?\s+(?:books?|works?|novels?)/gi,
+    // Pattern 3: Expressed preference followed by author name
+    /(?:love|like|adore|prefer|want|get|buy|find)(?:\s+(?:reading\s+)?(?:books?\s+by\s+)?|\s+)([a-z][a-z.'-]*(?:\s+[a-z][a-z.'-]*){1,3})/gi,
+    // Pattern 4: Start of sentence (Confidence depends on "books" keyword)
+    /^([a-z][a-z.'-]*(?:\s+[a-z][a-z.'-]*){0,2})(?=\s+books)/gi,
   ];
 
   for (const pattern of authorPatterns) {
     let match;
     while ((match = pattern.exec(rawContent)) !== null) {
-      const author = normalizeAuthorName(match[1]);
-      if (author.length > 2 && !preferredAuthors.includes(author)) {
+      let authorName = (match[1] || '').trim();
+      if (!authorName) continue;
+      
+      // Clean up author name and validation
+      const tokens = authorName.split(/\s+/);
+      const filteredTokens = tokens.filter(t => !authorExclusions.includes(t.toLowerCase()));
+      
+      // If we filtered everything or it looks like a single generic word, skip
+      if (filteredTokens.length === 0) continue;
+      
+      authorName = filteredTokens.join(' ');
+      const author = normalizeAuthorName(authorName);
+      
+      if (author.length > 3 && !preferredAuthors.includes(author)) {
         preferredAuthors.push(author);
       }
     }

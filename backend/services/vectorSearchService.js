@@ -38,9 +38,10 @@ const applyFilters = (books = [], filters = {}) => {
 const mongoFallbackSearch = async (queryEmbedding, filters = {}, limit = 20) => {
   let query = { embedding: { $exists: true, $ne: null } };
 
-  if (filters.genres && filters.genres.length > 0) {
-    query.genre = { $in: filters.genres };
-  }
+  // Relaxed: Removed hard genre filter to allow semantic discovery in fallback mode
+  // if (filters.genres && filters.genres.length > 0) {
+  //   query.genre = { $in: filters.genres };
+  // }
 
   if (filters.minPrice || filters.maxPrice) {
     query.price = {};
