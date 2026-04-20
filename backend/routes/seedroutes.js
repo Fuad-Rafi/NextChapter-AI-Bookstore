@@ -1,56 +1,30 @@
-import { Router } from 'express';
-import Book from '../models/bookmodels.js';
+
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
 
 const seedRouter = Router();
 
-// Seed data
-const seedBooks = [
-  {
-    title: 'The Silent Cipher',
-    author: 'Nina Hale',
-    description: 'A fast-paced mystery about a journalist uncovering a decades-old secret network.',
-    genre: 'Mystery',
-    tags: ['investigation', 'thriller', 'fast-paced'],
-    themes: ['truth', 'betrayal'],
-    subjects: ['journalism', 'crime'],
-    language: 'English',
-    audience: 'Adult',
-    publishedDate: new Date('2022-04-11'),
-    price: 240,
-    rating: 4.5,
-    isPublished: true,
-  },
-  {
-    title: 'Summer at Fern Lake',
-    author: 'Iris Moore',
-    description: 'A warm contemporary romance set in a quiet lakeside town.',
-    genre: 'Romance',
-    tags: ['small-town', 'feel-good'],
-    themes: ['healing', 'second chances'],
-    subjects: ['relationships'],
-    language: 'English',
-    audience: 'Adult',
-    publishedDate: new Date('2021-06-20'),
-    price: 210,
-    rating: 4.1,
-    isPublished: true,
-  },
-  {
-    title: 'Orbit of Ashes',
-    author: 'K. R. Solis',
-    description: 'A political science fiction epic where factions battle for control of a dying star system.',
-    genre: 'Science Fiction',
-    tags: ['space opera', 'epic'],
-    themes: ['power', 'survival'],
-    subjects: ['space', 'politics'],
-    language: 'English',
-    audience: 'Adult',
-    publishedDate: new Date('2020-09-01'),
-    price: 320,
-    rating: 4.7,
-    isPublished: true,
-  },
-];
+// Load books from seed.books.json
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const SEED_FILE_PATH = path.resolve(__dirname, '../../seed.books.json');
+
+let seedBooks = [];
+try {
+  if (fs.existsSync(SEED_FILE_PATH)) {
+    const fileContent = fs.readFileSync(SEED_FILE_PATH, 'utf-8');
+    seedBooks = JSON.parse(fileContent);
+    // Convert publishedDate strings to Date objects if needed
+    seedBooks = seedBooks.map(book => ({
+      ...book,
+      publishedDate: book.publishedDate ? new Date(book.publishedDate) : undefined,
+    }));
+  } else {
+    console.warn(`Seed file not found at: ${SEED_FILE_PATH}`);
+  }
+} catch (err) {
+  console.error('Failed to load seed.books.json:', err);
+}
 
 // Middleware to verify seed token
 const verifySeedToken = (req, res, next) => {
@@ -71,16 +45,19 @@ const verifySeedToken = (req, res, next) => {
 // Seed database endpoint
 seedRouter.post('/seed-database', verifySeedToken, async (req, res) => {
   try {
-    // Clear existing books (optional - comment out if you want to append)
-    const deleteResult = await Book.deleteMany({});
-    console.log(`Deleted ${deleteResult.deletedCount} books`);
-
-    // Insert new books
-    const result = await Book.insertMany(seedBooks);
+    let upsertedCount = 0;
+    for (const book of seedBooks) {
+      await Book.findOneAndUpdate(
+        { title: book.title, author: book.author },
+        book,
+        { upsert: true, new: true, runValidators: true, setDefaultsOnInsert: true }
+      );
+      upsertedCount++;
+    }
     res.json({
       success: true,
-      message: `Database seeded with ${result.length} books`,
-      booksInserted: result.length,
+      message: `Database seeded with ${upsertedCount} books (upserted).`,
+      booksUpserted: upsertedCount,
     });
   } catch (error) {
     console.error('Seed error:', error);
