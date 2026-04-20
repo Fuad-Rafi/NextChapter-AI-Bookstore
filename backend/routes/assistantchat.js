@@ -81,10 +81,10 @@ router.post('/chat', authenticateToken, requireRole('customer'), assistantChatRa
       return res.status(400).json({ message: `Message must be <= ${MAX_MESSAGE_LENGTH} characters` });
     }
 
-    const requestedLimit = Number(req.body.limit ?? 5);
+    const requestedLimit = Number(req.body.limit ?? 3);
     const limit = Number.isFinite(requestedLimit)
-      ? Math.min(Math.max(Math.trunc(requestedLimit), 1), 8)
-      : 5;
+      ? Math.min(Math.max(Math.trunc(requestedLimit), 2), 4)
+      : 3;
 
     let conversation;
     if (req.body.conversationId && mongoose.Types.ObjectId.isValid(String(req.body.conversationId))) {
@@ -154,11 +154,11 @@ router.post('/chat', authenticateToken, requireRole('customer'), assistantChatRa
         const recommendedTitleSet = new Set(llmResult.recommendedTitles || []);
         const selectedBooks = recommendedTitleSet.size > 0
           ? retrieval.retrievedBooks.filter((book) => recommendedTitleSet.has(book.title)).slice(0, limit)
-          : retrieval.retrievedBooks.slice(0, Math.min(limit, 3));
+          : retrieval.retrievedBooks.slice(0, limit);
 
         const groundedBooks = selectedBooks.length > 0
           ? selectedBooks
-          : retrieval.retrievedBooks.slice(0, Math.min(limit, 3));
+          : retrieval.retrievedBooks.slice(0, limit);
 
         responseRecommendations = buildGroundedRecommendations(groundedBooks);
         recommendedBookIds = groundedBooks.map((book) => book._id);

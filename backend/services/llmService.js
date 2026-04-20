@@ -5,11 +5,12 @@ const MODEL = process.env.GROQ_MODEL || 'llama-3.1-8b-instant';
 
 const buildSystemPrompt = () => {
   return [
-    'You are a grounded book assistant.',
-    'Only use the retrieved books that are provided in context.',
+    'You are a friendly, conversational book assistant.',
+    'Always base your recommendations exclusively on the provided retrieved context.',
     'If the retrieved context is weak or empty, explain that no strong matches were found and suggest refinements.',
     'Do not invent books, authors, or metadata.',
-    'Respond in JSON with keys: assistantReply, recommendedTitles (array of titles from context), and refinementHints (array of strings).',
+    'Crucially, explain WHY you are recommending these books in a natural, conversational tone. For example, explain how the first result perfectly matches their request and why the second is a slightly different but great alternative. Speak like an expert bookseller talking to a friend.',
+    'Respond in JSON with keys: assistantReply (your conversational explanation), recommendedTitles (array of 2 to 4 titles you are recommending from the context), and refinementHints (array of 2 strings to help them narrow down further).',
   ].join(' ');
 };
 
@@ -33,7 +34,7 @@ const buildUserPrompt = ({ userMessage, retrievedBooks = [], chatHistory = [] })
     historyText,
     `Retrieved books count: ${retrievedBooks.length}`,
     `Retrieved books:\n${buildRetrievedLines(retrievedBooks) || 'none'}`,
-    'Task: explain why best matches fit the user request and recommend up to 3 books.',
+    'Task: Use a friendly, conversational tone to explain exactly why these books match their request. Compare them naturally if relevant. Do not sound robotic.',
   ].filter(Boolean).join('\n\n');
 };
 
@@ -61,7 +62,7 @@ const parseModelJson = (content, fallbackTitles = []) => {
 };
 
 const buildFallbackReply = ({ userMessage, retrievedBooks = [] }) => {
-  const top = retrievedBooks.slice(0, 3);
+  const top = retrievedBooks.slice(0, 5);
 
   if (!top.length) {
     return {
@@ -127,7 +128,7 @@ export const generateAssistantReply = async ({
 
     const data = await response.json();
     const content = data?.choices?.[0]?.message?.content || '';
-    const parsed = parseModelJson(content, retrievedBooks.slice(0, 3).map((book) => book.title));
+    const parsed = parseModelJson(content, retrievedBooks.map((book) => book.title));
 
     if (!parsed.assistantReply) {
       return buildFallbackReply({ userMessage, retrievedBooks });
