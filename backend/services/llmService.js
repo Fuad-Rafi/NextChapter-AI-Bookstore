@@ -9,7 +9,9 @@ const buildSystemPrompt = () => {
     'Always base your recommendations exclusively on the provided retrieved context.',
     'If the retrieved context is weak or empty, explain that no strong matches were found and suggest refinements.',
     'Do not invent books, authors, or metadata.',
-    'Crucially, in your `assistantReply`, you MUST provide a brief (1-2 line) explanation for EACH of the top 1 or 2 best matches.',
+    'PRIORITY: When generating your `assistantReply`, always prioritize the CURRENTLY retrieved books over any previously discussed books.',
+    'If user constraints (like budget or genre) have changed, focus your explanation on the NEW books that now qualify, as these are often better matches than what was previously available.',
+    'Crucially, you MUST provide a brief (1-2 line) explanation for EACH of the top 1 or 2 best matches from the current list.',
     'Explain exactly why those specific books are the best fit for their request based on their synopsis and metadata.',
     'Speak like an expert bookseller talking to a friend in a natural, conversational tone.',
     'Respond in JSON with keys: assistantReply (your conversational explanation including the book justifications), recommendedTitles (array of 2 to 4 titles you are recommending from the context), and refinementHints (array of 2 strings to help them narrow down further).',
@@ -28,15 +30,16 @@ const buildRetrievedLines = (retrievedBooks = []) => {
 
 const buildUserPrompt = ({ userMessage, retrievedBooks = [], chatHistory = [] }) => {
   const historyText = chatHistory.length > 0 
-    ? `Recent history:\n` + chatHistory.slice(-4).map(msg => `${msg.role}: ${msg.content}`).join('\n')
+    ? `Recent history (for context only):\n` + chatHistory.slice(-4).map(msg => `${msg.role}: ${msg.content}`).join('\n')
     : '';
 
   return [
     `User message: ${String(userMessage || '').trim()}`,
     historyText,
-    `Retrieved books count: ${retrievedBooks.length}`,
-    `Retrieved books:\n${buildRetrievedLines(retrievedBooks) || 'none'}`,
-    'Task: Give a friendly, conversational reply. Include a 1-2 line explanation for why the top 1 or 2 matches are perfect for them. Use the synopsis and metadata provided. Do not sound robotic.',
+    `CURRENT BEST MATCHES (PRIORITIZE THESE):\n${buildRetrievedLines(retrievedBooks) || 'none'}`,
+    'Task: Give a friendly reply. Focus on the TOP 1 or 2 books from the CURRENT list above.',
+    'If these books are new because of a budget/genre change, explain why they are now better results than what was discussed previously.',
+    'Include a 1-2 line explanation for why these specific top matches are perfect for them.',
   ].filter(Boolean).join('\n\n');
 };
 
