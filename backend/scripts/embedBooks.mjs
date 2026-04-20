@@ -34,10 +34,9 @@ const embedBooks = async () => {
 
       try {
         // Build search text from book metadata
-        const searchText = [
+        const metadataText = [
           book.title,
           book.author,
-          book.synopsis || book.description || '',
           book.genre,
           ...(Array.isArray(book.tags) ? book.tags : []),
           ...(Array.isArray(book.themes) ? book.themes : []),
@@ -46,8 +45,15 @@ const embedBooks = async () => {
           .filter(Boolean)
           .join(' ');
 
-        // Generate embedding
-        const embedding = await embeddingService.embedText(searchText);
+        const synopsisText = book.synopsis || book.description || '';
+        const fullText = `${metadataText}. ${synopsisText}`.trim();
+        
+        const chunks = embeddingService.chunkText(fullText, 200, 40);
+        if (chunks.length === 0) chunks.push(metadataText || book.title);
+
+        // Generate embeddings for all chunks
+        const chunkEmbeddings = await embeddingService.batchEmbed(chunks);
+        const embedding = chunkEmbeddings[0]; // fallback for Mongo
 
         // Update book with embedding
         const updated = await Book.findByIdAndUpdate(
@@ -60,9 +66,10 @@ const embedBooks = async () => {
             },
           },
           { new: true }
-        );
+        ).lean();
 
-        if (updated?.embedding?.length) {
+        if (updated && chunkEmbeddings.length > 0) {
+          updated.chunkEmbeddings = chunkEmbeddings;
           try {
             await upsertBookPoint(updated);
           } catch (syncError) {

@@ -88,22 +88,42 @@ const toBookPayload = (book = {}) => ({
 
 export const upsertBookPoint = async (book = {}) => {
   const qdrant = getClient();
-  const pointId = toQdrantPointId(book._id);
-  if (!qdrant || !Array.isArray(book.embedding) || book.embedding.length === 0 || !pointId) {
+  if (!qdrant || !book._id) {
     return false;
   }
 
   await ensureQdrantCollection();
 
-  await qdrant.upsert(QDRANT_COLLECTION, {
-    wait: false,
-    points: [
-      {
+  const points = [];
+  const payload = toBookPayload(book);
+
+  if (Array.isArray(book.chunkEmbeddings) && book.chunkEmbeddings.length > 0) {
+    book.chunkEmbeddings.forEach((vector, idx) => {
+      const pointId = toQdrantPointId(`${book._id}_chunk${idx}`);
+      if (pointId && vector.length > 0) {
+        points.push({
+          id: pointId,
+          vector,
+          payload,
+        });
+      }
+    });
+  } else if (Array.isArray(book.embedding) && book.embedding.length > 0) {
+    const pointId = toQdrantPointId(book._id);
+    if (pointId) {
+      points.push({
         id: pointId,
         vector: book.embedding,
-        payload: toBookPayload(book),
-      },
-    ],
+        payload,
+      });
+    }
+  }
+
+  if (points.length === 0) return false;
+
+  await qdrant.upsert(QDRANT_COLLECTION, {
+    wait: false,
+    points,
   });
 
   return true;
@@ -180,18 +200,30 @@ export const searchBookPoints = async (queryEmbedding = [], { limit = 20, filter
 
   await ensureQdrantCollection();
 
+  // Search a bit more to account for deduping
   const results = await qdrant.search(QDRANT_COLLECTION, {
     vector: queryEmbedding,
-    limit,
+    limit: limit * 3,
     with_payload: true,
     filter: buildQdrantFilter(filters),
   });
 
-  return (results || []).map((item) => ({
-    id: String(item.payload?.mongoId || item.id),
-    score: Number(item.score || 0),
-    payload: item.payload || {},
-  }));
+  // Deduplicate by mongoId, keeping highest score
+  const dedupedMap = new Map();
+  for (const item of (results || [])) {
+    const bookId = String(item.payload?.mongoId || item.id);
+    if (!dedupedMap.has(bookId) || dedupedMap.get(bookId).score < item.score) {
+      dedupedMap.set(bookId, {
+        id: bookId,
+        score: Number(item.score || 0),
+        payload: item.payload || {},
+      });
+    }
+  }
+
+  return Array.from(dedupedMap.values())
+    .sort((a, b) => b.score - a.score)
+    .slice(0, limit);
 };
 
 export const isQdrantEnabled = () => isEnabled();

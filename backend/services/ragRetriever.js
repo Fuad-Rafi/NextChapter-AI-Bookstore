@@ -3,6 +3,8 @@ import Order from '../models/ordermodel.js';
 import * as embeddingService from './embeddingService.js';
 import { getUnifiedVectorSearch } from './vectorSearchService.js';
 import { extractPreferenceSignals } from './memoryService.js';
+import User from '../models/usermodel.js';
+import { rankBooks, buildHistorySignals } from '../utils/recommendationScoring.js';
 
 // Safety-net threshold — only filters out completely irrelevant noise.
 // Intentionally very low since we rely on ranking, not hard cutoffs.
@@ -150,9 +152,10 @@ export const retrieveRelevantBooks = async ({
   const constraints = extractPreferenceSignals(query);
   const { preferredAuthors, budgetMin, budgetMax, preferredGenres } = constraints;
 
-  // Run order lookup and query embedding in parallel
-  const [orders, queryEmbedding] = await Promise.all([
+  // Run order lookup, user fetch, and query embedding in parallel
+  const [orders, user, queryEmbedding] = await Promise.all([
     Order.find({ customerId: userId }).lean(),
+    User.findById(userId).lean(),
     embeddingService.embedText(query),
   ]);
 
@@ -193,25 +196,8 @@ export const retrieveRelevantBooks = async ({
 
   let merged = mergeDeduped(authorWithScores, semanticWithScores);
 
-  // ── Step 4: Genre boost (soft — not a hard filter) ───────────────────
-  // Books matching the requested genre get a small relevance bump
-  if (preferredGenres.length > 0) {
-    merged = merged.map((book) => {
-      const bookGenre = String(book.genre || '').toLowerCase();
-      const genreMatch = preferredGenres.some((g) => bookGenre.includes(g) || g.includes(bookGenre));
-      return genreMatch
-        ? { ...book, relevanceScore: Math.min(1, (book.relevanceScore || 0) + 0.12) }
-        : book;
-    });
-  }
-
-  // ── Step 5: Remove low-confidence noise ──────────────────────────────
-  let candidates = merged.filter(
-    (book) => Number.isFinite(book.relevanceScore) && book.relevanceScore >= DEFAULT_RELEVANCE_THRESHOLD
-  );
-
-  // ── Step 6: Keyword fallback ──────────────────────────────────────────
-  // Only triggered if semantic + author search both returned nothing
+  // ── Step 4: Keyword fallback if empty ─────────────────────────────────
+  let candidates = merged;
   if (candidates.length === 0) {
     const keywordResults = await searchByKeyword(query, budgetMin, budgetMax, excludeBookIds, limit);
     candidates = keywordResults.map((book) => ({
@@ -220,14 +206,35 @@ export const retrieveRelevantBooks = async ({
     }));
   }
 
-  // Sort: relevanceScore desc, then by rating as tiebreaker
-  const finalBooks = candidates
-    .sort((a, b) => {
-      const scoreDiff = (b.relevanceScore || 0) - (a.relevanceScore || 0);
-      if (Math.abs(scoreDiff) > 0.01) return scoreDiff;
-      return (b.rating || 0) - (a.rating || 0);
-    })
-    .slice(0, limit);
+  // ── Step 5: Personalized recommendation scoring ────────────────────────
+  let finalBooks = candidates;
+  if (candidates.length > 0) {
+    const historySignals = buildHistorySignals(orders, candidates, user?.feedbackProfile || {});
+    const prefs = user?.preferences || {};
+    
+    // Merge extracted constraints with user preferences
+    const mergedPreferences = {
+      ...prefs,
+      preferredAuthors: [...new Set([...(prefs.preferredAuthors || []), ...preferredAuthors])],
+      preferredGenres:  [...new Set([...(prefs.preferredGenres || []), ...preferredGenres])],
+    };
+
+    const ranked = rankBooks({
+      books: candidates,
+      query,
+      queryEmbedding,
+      userPreferences: mergedPreferences,
+      historySignals,
+      limit,
+    });
+    
+    finalBooks = ranked
+      .filter(r => r.score >= DEFAULT_RELEVANCE_THRESHOLD)
+      .map(r => ({
+        ...r.book,
+        relevanceScore: Math.max(r.score, r.book.relevanceScore || 0),
+      }));
+  }
 
   return {
     query,

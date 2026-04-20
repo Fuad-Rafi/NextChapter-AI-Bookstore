@@ -24,6 +24,20 @@ const getExtractor = async () => {
   return extractor;
 };
 
+export const chunkText = (text, maxWords = 200, overlap = 50) => {
+  if (!text || typeof text !== 'string') return [];
+  const words = text.split(/\s+/).filter(Boolean);
+  if (words.length === 0) return [];
+  
+  const chunks = [];
+  let i = 0;
+  while (i < words.length) {
+    chunks.push(words.slice(i, i + maxWords).join(' '));
+    i += (maxWords - overlap);
+  }
+  return chunks;
+};
+
 /**
  * Generate embedding for a single text string
  * @param {string} text - Text to embed
@@ -36,8 +50,7 @@ export const embedText = async (text) => {
 
   try {
     const extractor = await getExtractor();
-    const trimmedText = text.substring(0, 512); // Limit to 512 chars due to model limit
-    const result = await extractor(trimmedText, {
+    const result = await extractor(text, {
       pooling: 'mean',
       normalize: true,
     });
@@ -100,8 +113,7 @@ export const batchEmbed = async (texts) => {
     for (let i = 0; i < texts.length; i += 10) {
       const batch = texts.slice(i, i + 10);
       for (const text of batch) {
-        const trimmedText = (text || '').substring(0, 512);
-        const result = await extractor(trimmedText, {
+        const result = await extractor(text || '', {
           pooling: 'mean',
           normalize: true,
         });
@@ -186,6 +198,7 @@ export default {
   embedText,
   cosineSimilarity,
   batchEmbed,
+  chunkText,
   findMostSimilar,
   averageEmbeddings,
 };

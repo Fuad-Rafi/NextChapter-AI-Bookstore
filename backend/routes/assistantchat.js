@@ -5,7 +5,7 @@ import User from '../models/usermodel.js';
 import Book from '../models/bookmodels.js';
 import { authenticateToken, requireRole } from '../middleware/auth.js';
 import { createRateLimiter } from '../middleware/rateLimit.js';
-import { generateAssistantReply } from '../services/llmService.js';
+import { generateAssistantReply, reformulateQuery } from '../services/llmService.js';
 import { classifyQueryIntent, retrieveRelevantBooks } from '../services/ragRetriever.js';
 import {
   RATE_LIMIT_ASSISTANT_CHAT_PER_MINUTE,
@@ -108,7 +108,12 @@ router.post('/chat', authenticateToken, requireRole('customer'), assistantChatRa
       createdAt: new Date(),
     };
 
-    const intent = classifyQueryIntent(rawMessage);
+    let searchMessage = rawMessage;
+    if (conversation.messages.length > 0) {
+      searchMessage = await reformulateQuery(conversation.messages, rawMessage);
+    }
+
+    const intent = classifyQueryIntent(searchMessage);
     let assistantReply = '';
     let responseRecommendations = [];
     let recommendedBookIds = [];
@@ -124,7 +129,7 @@ router.post('/chat', authenticateToken, requireRole('customer'), assistantChatRa
     } else {
       const retrieval = await retrieveRelevantBooks({
         userId: req.user.id,
-        userQuery: rawMessage,
+        userQuery: searchMessage,
         limit,
       });
 
@@ -141,6 +146,7 @@ router.post('/chat', authenticateToken, requireRole('customer'), assistantChatRa
         const llmResult = await generateAssistantReply({
           userMessage: rawMessage,
           retrievedBooks: retrieval.retrievedBooks,
+          chatHistory: conversation.messages,
         });
 
         assistantReply = llmResult.assistantReply;

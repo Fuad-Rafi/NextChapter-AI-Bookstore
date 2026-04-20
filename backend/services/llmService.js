@@ -23,13 +23,18 @@ const buildRetrievedLines = (retrievedBooks = []) => {
   }).join('\n');
 };
 
-const buildUserPrompt = ({ userMessage, retrievedBooks = [] }) => {
+const buildUserPrompt = ({ userMessage, retrievedBooks = [], chatHistory = [] }) => {
+  const historyText = chatHistory.length > 0 
+    ? `Recent history:\n` + chatHistory.slice(-4).map(msg => `${msg.role}: ${msg.content}`).join('\n')
+    : '';
+
   return [
     `User message: ${String(userMessage || '').trim()}`,
+    historyText,
     `Retrieved books count: ${retrievedBooks.length}`,
     `Retrieved books:\n${buildRetrievedLines(retrievedBooks) || 'none'}`,
     'Task: explain why best matches fit the user request and recommend up to 3 books.',
-  ].join('\n\n');
+  ].filter(Boolean).join('\n\n');
 };
 
 const parseModelJson = (content, fallbackTitles = []) => {
@@ -82,6 +87,7 @@ const buildFallbackReply = ({ userMessage, retrievedBooks = [] }) => {
 export const generateAssistantReply = async ({
   userMessage,
   retrievedBooks = [],
+  chatHistory = [],
 }) => {
   if (!GROQ_API_KEY) {
     return buildFallbackReply({ userMessage, retrievedBooks });
@@ -96,7 +102,7 @@ export const generateAssistantReply = async ({
       { role: 'system', content: buildSystemPrompt() },
       {
         role: 'user',
-        content: buildUserPrompt({ userMessage, retrievedBooks }),
+        content: buildUserPrompt({ userMessage, retrievedBooks, chatHistory }),
       },
     ],
   };
@@ -137,3 +143,44 @@ export const generateAssistantReply = async ({
     return buildFallbackReply({ userMessage, retrievedBooks });
   }
 };
+
+export const reformulateQuery = async (chatHistory = [], currentMessage = '') => {
+  if (!GROQ_API_KEY || chatHistory.length === 0) return currentMessage;
+
+  const historyText = chatHistory.slice(-4).map(msg => `${msg.role}: ${msg.content}`).join('\n');
+  const payload = {
+    model: MODEL,
+    temperature: 0.1,
+    max_tokens: 100,
+    messages: [
+      { role: 'system', content: 'You are a query reformulator for a book recommendation system. Given the chat history and the latest user message, rewrite the user message into a standalone search query that captures all implied context (e.g. genre, theme). If the user message is standalone, just return it. Do not include chatty text, respond ONLY with the query.' },
+      { role: 'user', content: `Chat History:\n${historyText}\n\nLatest User Message: ${currentMessage}\n\nReformulated Standalone Query:` }
+    ]
+  };
+
+  try {
+    const response = await fetch(GROQ_API_URL, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${GROQ_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    });
+    
+    if (!response.ok) return currentMessage;
+
+    const data = await response.json();
+    const reformulated = data?.choices?.[0]?.message?.content?.trim();
+    
+    // Fallback securely
+    if (!reformulated || reformulated.toLowerCase().startsWith('i am a') || reformulated.length > 200) {
+      return currentMessage;
+    }
+    
+    return reformulated;
+  } catch (error) {
+    return currentMessage;
+  }
+};
+
