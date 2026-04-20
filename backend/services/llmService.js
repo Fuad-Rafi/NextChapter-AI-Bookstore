@@ -9,8 +9,10 @@ const buildSystemPrompt = () => {
     'Always base your recommendations exclusively on the provided retrieved context.',
     'If the retrieved context is weak or empty, explain that no strong matches were found and suggest refinements.',
     'Do not invent books, authors, or metadata.',
-    'Crucially, explain WHY you are recommending these books in a natural, conversational tone. For example, explain how the first result perfectly matches their request and why the second is a slightly different but great alternative. Speak like an expert bookseller talking to a friend.',
-    'Respond in JSON with keys: assistantReply (your conversational explanation), recommendedTitles (array of 2 to 4 titles you are recommending from the context), and refinementHints (array of 2 strings to help them narrow down further).',
+    'Crucially, in your `assistantReply`, you MUST provide a brief (1-2 line) explanation for EACH of the top 1 or 2 best matches.',
+    'Explain exactly why those specific books are the best fit for their request based on their synopsis and metadata.',
+    'Speak like an expert bookseller talking to a friend in a natural, conversational tone.',
+    'Respond in JSON with keys: assistantReply (your conversational explanation including the book justifications), recommendedTitles (array of 2 to 4 titles you are recommending from the context), and refinementHints (array of 2 strings to help them narrow down further).',
   ].join(' ');
 };
 
@@ -34,7 +36,7 @@ const buildUserPrompt = ({ userMessage, retrievedBooks = [], chatHistory = [] })
     historyText,
     `Retrieved books count: ${retrievedBooks.length}`,
     `Retrieved books:\n${buildRetrievedLines(retrievedBooks) || 'none'}`,
-    'Task: Use a friendly, conversational tone to explain exactly why these books match their request. Compare them naturally if relevant. Do not sound robotic.',
+    'Task: Give a friendly, conversational reply. Include a 1-2 line explanation for why the top 1 or 2 matches are perfect for them. Use the synopsis and metadata provided. Do not sound robotic.',
   ].filter(Boolean).join('\n\n');
 };
 
@@ -97,7 +99,7 @@ export const generateAssistantReply = async ({
   const payload = {
     model: MODEL,
     temperature: 0.2,
-    max_tokens: 450,
+    max_tokens: 600,
     response_format: { type: 'json_object' },
     messages: [
       { role: 'system', content: buildSystemPrompt() },
